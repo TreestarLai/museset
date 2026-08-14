@@ -1,0 +1,1926 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MuseSet排云 · 公众号排版工具</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@200;300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=LXGW+WenKai:wght@300;400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        :root{--bg:#fafafa;--card:#fff;--bd:#e8e8e8;--txt:#333;--txt2:#888;--ac:#2c2c2c;--ac2:#f0f0f0}
+        body{font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;background:var(--bg);color:var(--txt);line-height:1.6}
+        .container{display:flex;height:100vh}
+
+        /* Left */
+        .left{width:380px;min-width:380px;border-right:1px solid var(--bd);display:flex;flex-direction:column;background:var(--card);overflow-y:auto}
+        .left::-webkit-scrollbar{width:4px}
+        .left::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
+        .header{padding:20px 24px;border-bottom:1px solid var(--bd)}
+        .header h1{font-size:18px;font-weight:600}
+        .header .sub{font-size:12px;color:var(--txt2);margin-top:2px}
+        .tabs{display:flex;border-bottom:1px solid var(--bd)}
+        .tab{flex:1;padding:12px;text-align:center;cursor:pointer;font-size:13px;color:var(--txt2);border-bottom:2px solid transparent;transition:.15s}
+        .tab.active{color:var(--txt);border-bottom-color:var(--ac);font-weight:500}
+        .tab-content{display:none;flex:1;flex-direction:column;overflow-y:auto}
+        .tab-content.active{display:flex}
+        .input-section{padding:20px 24px;flex:1;display:flex;flex-direction:column}
+        textarea{width:100%;height:220px;border:1px solid var(--bd);border-radius:8px;padding:14px;font-size:14px;line-height:1.8;resize:vertical;font-family:inherit;outline:none;transition:border-color .2s}
+        textarea:focus{border-color:#999}
+        textarea::placeholder{color:#ccc}
+
+        /* Settings */
+        .settings{padding:16px 24px 24px}
+        .sg{margin-bottom:14px}
+        .sg-label{display:flex;justify-content:space-between;font-size:12px;color:var(--txt2);margin-bottom:5px}
+        .sg-label .v{color:var(--txt);font-weight:500}
+        .sg select,.sg input[type="range"]{width:100%}
+        select{padding:7px 10px;border:1px solid var(--bd);border-radius:6px;font-size:13px;outline:none;background:#fff;cursor:pointer}
+        input[type="range"]{-webkit-appearance:none;height:4px;background:var(--ac2);border-radius:2px;outline:none}
+        input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:var(--ac);border-radius:50%;cursor:pointer}
+        .color-row{display:flex;align-items:center;gap:10px}
+        input[type="color"]{width:32px;height:32px;border:1px solid var(--bd);border-radius:6px;cursor:pointer;padding:2px}
+        .color-hex{font-size:12px;color:var(--txt2);font-family:monospace}
+        .toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+        .toggle-row span{font-size:12px;color:var(--txt2)}
+        .toggle{position:relative;width:36px;height:20px;background:#ddd;border-radius:10px;cursor:pointer;transition:background .2s}
+        .toggle.on{background:var(--ac)}
+        .toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s}
+        .toggle.on::after{transform:translateX(16px)}
+        .btn-group{display:flex;gap:8px;margin-top:4px}
+        .btn{padding:10px 14px;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;transition:opacity .15s;flex:1;text-align:center}
+        .btn:hover{opacity:.8}
+        .btn-p{background:var(--ac);color:#fff}
+        .btn-s{background:var(--ac2);color:var(--txt)}
+        .btn-w{background:#fff;color:var(--txt);border:1px solid var(--bd)}
+
+        /* Align button group */
+        .align-group{display:flex;gap:0;border:1px solid var(--bd);border-radius:6px;overflow:hidden}
+        .align-btn{flex:1;padding:6px 0;border:none;background:#fff;font-size:12px;cursor:pointer;color:var(--txt2);transition:all .15s;border-right:1px solid var(--bd)}
+        .align-btn:last-child{border-right:none}
+        .align-btn.active{background:var(--ac);color:#fff}
+        .align-btn:hover:not(.active){background:var(--ac2)}
+        .fw-hint{font-size:10px;color:#bbb;margin-top:2px}
+
+        /* Right */
+        .right{flex:1;display:flex;flex-direction:column;overflow:hidden}
+        .toolbar{padding:12px 24px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;background:var(--card);flex-shrink:0}
+        .toolbar .info{font-size:12px;color:var(--txt2)}
+        .toolbar .actions{display:flex;gap:6px}
+        .toolbar .actions .btn{flex:none;padding:6px 12px;font-size:12px}
+        .gallery{flex:1;overflow-y:auto;padding:24px}
+        .gallery::-webkit-scrollbar{width:6px}
+        .gallery::-webkit-scrollbar-thumb{background:#ddd;border-radius:3px}
+        .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#ccc}
+        .empty svg{width:48px;height:48px;margin-bottom:12px;stroke:#ddd}
+        .empty p{font-size:14px}
+        .empty .hint{font-size:12px;margin-top:4px;color:#ddd}
+        .grid{display:flex;flex-direction:column;gap:16px;max-width:620px;margin:0 auto}
+
+        /* Card */
+        .card{background:var(--card);border:1px solid var(--bd);border-radius:10px;overflow:hidden;transition:box-shadow .2s,border-color .2s;position:relative}
+        .card:hover{box-shadow:0 2px 12px rgba(0,0,0,.06);border-color:#ccc}
+        .card.editing{border-color:var(--ac);box-shadow:0 0 0 1px var(--ac)}
+        .card .badge{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:2px 7px;border-radius:4px;z-index:2;pointer-events:none}
+        .card .badge.opening{background:rgba(120,80,40,.65)}
+        .card .badge.edited{position:absolute;top:8px;right:8px;background:rgba(60,120,60,.65)}
+        .card canvas{width:100%;display:block;cursor:pointer}
+        .card .hover-bar{position:absolute;bottom:0;left:0;right:0;padding:8px 12px;background:linear-gradient(transparent,rgba(0,0,0,.5));display:flex;justify-content:flex-end;gap:4px;opacity:0;transition:opacity .15s}
+        .card:hover .hover-bar{opacity:1}
+        .card .hover-bar button{width:28px;height:28px;border:none;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+        .card .hover-bar button:hover{background:rgba(255,255,255,.4)}
+
+        /* ── Edit Modal ── */
+        .edit-overlay{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:80;display:none}
+        .edit-overlay.show{display:block}
+        .edit-panel{position:fixed;top:0;right:-420px;width:400px;height:100vh;background:var(--card);border-left:1px solid var(--bd);z-index:90;display:flex;flex-direction:column;transition:right .3s ease;box-shadow:-4px 0 20px rgba(0,0,0,.08)}
+        .edit-panel.show{right:0}
+        .edit-header{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+        .edit-header h3{font-size:14px;font-weight:600}
+        .edit-header .close-btn{width:28px;height:28px;border:none;border-radius:50%;background:var(--ac2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--txt2)}
+        .edit-header .close-btn:hover{background:#ddd}
+        .edit-preview{padding:16px 20px;background:#f5f5f5;flex-shrink:0;max-height:300px;overflow:hidden;display:flex;align-items:flex-start;justify-content:center;border-bottom:1px solid var(--bd);position:relative}
+        .edit-preview canvas{max-width:100%;max-height:260px;object-fit:contain;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+        .edit-settings{flex:1;overflow-y:auto;padding:16px 20px}
+        .edit-settings .sg{margin-bottom:16px}
+        .edit-footer{padding:12px 20px;border-top:1px solid var(--bd);display:flex;gap:8px;flex-shrink:0}
+        .edit-footer .btn{font-size:12px;padding:8px 12px}
+
+        /* Draggable overlay */
+        .drag-overlay-box{position:absolute;border:1.5px dashed rgba(44,44,255,.45);background:rgba(44,44,255,.04);cursor:move;z-index:10;pointer-events:auto;transition:background .15s}
+        .drag-overlay-box:hover{background:rgba(44,44,255,.08)}
+        .box-handle{position:absolute;width:8px;height:8px;background:#fff;border:1.5px solid #333;z-index:10;border-radius:1px}
+        .box-handle:hover{border-color:#4A90D9;background:#E8F0FE}
+        .box-handle.tl{top:-4px;left:-4px;cursor:nwse-resize}
+        .box-handle.tr{top:-4px;right:-4px;cursor:nesw-resize}
+        .box-handle.bl{bottom:-4px;left:-4px;cursor:nesw-resize}
+        .box-handle.br{bottom:-4px;right:-4px;cursor:nwse-resize}
+        .box-handle.tm{top:-4px;left:50%;margin-left:-4px;cursor:ns-resize}
+        .box-handle.bm{bottom:-4px;left:50%;margin-left:-4px;cursor:ns-resize}
+        .box-handle.ml{top:50%;left:-4px;margin-top:-4px;cursor:ew-resize}
+        .box-handle.mr{top:50%;right:-4px;margin-top:-4px;cursor:ew-resize}
+        .drag-label{position:absolute;top:-18px;left:0;font-size:10px;color:rgba(44,44,255,.6);white-space:nowrap;pointer-events:none}
+        .guide-line{position:absolute;z-index:9;pointer-events:none;display:none}
+        .guide-v{width:1px;top:0;bottom:0;border-left:1px dashed rgba(255,60,60,.55)}
+        .guide-h{height:1px;left:0;right:0;border-top:1px dashed rgba(255,60,60,.55)}
+
+        /* ── Presets ── */
+        .preset-section{padding:12px 24px;border-top:1px solid var(--bd);flex-shrink:0;background:#fafafa}
+        .preset-title{font-size:12px;font-weight:600;color:var(--txt2);margin-bottom:8px}
+        .preset-save-btn{width:100%;padding:6px;border:1px dashed var(--bd);border-radius:6px;background:transparent;font-size:12px;color:var(--txt2);cursor:pointer;margin-bottom:8px;transition:all .15s}
+        .preset-save-btn:hover{border-color:var(--ac);color:var(--txt)}
+        .preset-list{display:flex;flex-wrap:wrap;gap:6px;max-height:100px;overflow-y:auto}
+        .preset-tag{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:14px;font-size:11px;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--txt);transition:all .15s;position:relative}
+        .preset-tag:hover{border-color:var(--ac);background:var(--ac2)}
+        .preset-tag .preset-del{display:none;width:14px;height:14px;border:none;border-radius:50%;background:rgba(200,60,60,.8);color:#fff;font-size:9px;cursor:pointer;align-items:center;justify-content:center;line-height:1}
+        .preset-tag:hover .preset-del{display:flex}
+
+        /* ── Article Library Modal ── */
+        .lib-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;display:none;align-items:center;justify-content:center}
+        .lib-overlay.show{display:flex}
+        .lib-modal{width:680px;max-width:92vw;max-height:82vh;background:var(--card);border-radius:14px;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.15);overflow:hidden}
+        .lib-header{padding:18px 24px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+        .lib-header h2{font-size:16px;font-weight:600}
+        .lib-header .close-btn{width:28px;height:28px;border:none;border-radius:50%;background:var(--ac2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--txt2)}
+        .lib-body{flex:1;overflow-y:auto;padding:20px 24px}
+        .lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+        .note{border:1px solid var(--bd);border-radius:10px;overflow:hidden;cursor:pointer;transition:box-shadow .2s,transform .15s;background:#fff;position:relative}
+        .note:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);transform:translateY(-2px)}
+        .note-tab{height:28px;display:flex;align-items:center;padding:0 12px;font-size:11px;color:#fff;font-weight:500;letter-spacing:.3px}
+        .note-body{padding:10px 12px;font-size:11px;color:#666;line-height:1.5;max-height:80px;overflow:hidden}
+        .note-date{padding:4px 12px 8px;font-size:10px;color:#bbb;text-align:right}
+        .note-del{position:absolute;top:4px;right:6px;width:20px;height:20px;border:none;border-radius:50%;background:rgba(255,255,255,.7);color:#999;font-size:12px;cursor:pointer;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+        .note:hover .note-del{display:flex}
+        .note-del:hover{background:rgba(220,60,60,.8);color:#fff}
+        .lib-empty{text-align:center;padding:40px;color:#ccc;font-size:14px}
+
+        /* ── Save Modal ── */
+        .save-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;display:none;align-items:center;justify-content:center}
+        .save-overlay.show{display:flex}
+        .save-modal{width:420px;max-width:90vw;background:var(--card);border-radius:14px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+        .save-modal h3{font-size:16px;margin-bottom:16px;font-weight:600}
+        .save-modal input[type="text"]{width:100%;padding:10px 14px;border:1px solid var(--bd);border-radius:8px;font-size:14px;outline:none;margin-bottom:16px}
+        .save-modal input[type="text"]:focus{border-color:#999}
+        .save-modal .btn-group{margin-top:0}
+
+        /* ── Data Backup Bar ── */
+        .backup-bar{padding:8px 24px;border-top:1px solid var(--bd);display:flex;gap:6px;flex-shrink:0;background:#f9f9f9}
+        .backup-bar .btn{font-size:11px;padding:5px 10px;flex:1}
+
+        /* Preview Modal */
+        .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:none;align-items:center;justify-content:center}
+        .modal-bg.show{display:flex}
+        .phone{width:375px;height:720px;background:#fff;border-radius:32px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3);display:flex;flex-direction:column}
+        .phone-bar{height:44px;background:#ededed;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;flex-shrink:0}
+        .phone-body{flex:1;overflow-y:auto;padding:16px;background:#f5f5f5}
+        .phone-body img{width:100%;display:block;margin-bottom:4px;border-radius:2px}
+        .phone-close{margin-top:16px;padding:10px 28px;background:#fff;border:none;border-radius:20px;font-size:13px;cursor:pointer;color:var(--txt)}
+
+        /* Loading */
+        .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center}
+        .loading-overlay.hidden{display:none}
+        .loading-overlay .spinner{width:24px;height:24px;border:2px solid #ddd;border-top-color:var(--ac);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:12px}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .loading-overlay p{font-size:13px;color:var(--txt2)}
+
+
+        /* ── Download Select Modal ── */
+        .dl-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:105;display:none;align-items:center;justify-content:center}
+        .dl-overlay.show{display:flex}
+        .dl-modal{width:600px;max-width:92vw;max-height:80vh;background:var(--card);border-radius:14px;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.15);overflow:hidden}
+        .dl-header{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
+        .dl-header h3{font-size:15px;font-weight:600}
+        .dl-toolbar{padding:10px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
+        .dl-grid{flex:1;overflow-y:auto;padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
+        .dl-item{border:2px solid var(--bd);border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color .15s,box-shadow .15s;position:relative}
+        .dl-item.selected{border-color:var(--ac);box-shadow:0 0 0 1px var(--ac)}
+        .dl-item img{width:100%;display:block;aspect-ratio:auto;object-fit:contain;max-height:120px;background:#f5f5f5}
+        .dl-check{position:absolute;top:6px;left:6px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;z-index:2;opacity:0;transition:opacity .15s}
+        .dl-item.selected .dl-check{opacity:1;background:var(--ac)}
+        .dl-label{padding:4px 8px;font-size:11px;color:var(--txt2);text-align:center;background:#fafafa}
+        .dl-footer{padding:12px 20px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px}
+        .dl-footer .btn{flex:none;padding:8px 20px}
+        /* ── Filter Groups ── */
+        .filter-group{margin-bottom:12px}
+        .filter-btns{display:flex;flex-wrap:wrap;gap:4px}
+        .filter-btn{padding:4px 10px;border:1px solid var(--bd);border-radius:4px;background:#fff;font-size:11px;cursor:pointer;transition:all .15s}
+        .filter-btn:hover{background:var(--ac2)}
+        .filter-btn.active{background:var(--ac);color:#fff;border-color:var(--ac)}
+        @media(max-width:768px){
+            .container{flex-direction:column}
+            .left{width:100%;min-width:auto;max-height:50vh;border-right:none;border-bottom:1px solid var(--bd)}
+            .right{min-height:50vh}
+            .edit-panel{width:100%}
+        }
+    </style>
+</head>
+<body>
+
+<!-- Password Gate -->
+<div id="passwordGate" style="position:fixed;inset:0;z-index:9999;background:#fafafa;display:flex;align-items:center;justify-content:center;">
+    <div style="text-align:center;max-width:360px;width:90%;">
+        <div style="margin-bottom:40px;">
+            <div style="font-size:32px;font-weight:300;letter-spacing:4px;color:#333;">MuseSet</div>
+            <div style="font-size:14px;color:#888;margin-top:8px;letter-spacing:2px;">排云</div>
+        </div>
+        <input type="password" id="pwdInput" placeholder="输入访问密码" style="width:100%;padding:14px 18px;border:1px solid #e8e8e8;border-radius:8px;font-size:15px;outline:none;text-align:center;letter-spacing:1px;">
+        <div id="pwdError" style="color:#c0392b;font-size:12px;margin-top:10px;display:none;">密码错误，请重试</div>
+        <button id="pwdBtn" onclick="checkPassword()" style="width:100%;margin-top:16px;padding:12px;background:#2c2c2c;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;letter-spacing:1px;">进入</button>
+    </div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div><p>加载字体中…</p></div>
+
+<div class="container">
+    <!-- Left -->
+    <div class="left">
+        <div class="header">
+            <h1 style="font-weight:300;letter-spacing:2px;">MuseSet</h1>
+            <div class="sub" style="letter-spacing:1px;margin-top:4px;">排云 · 公众号排版工具</div>
+        </div>
+        <div class="tabs">
+            <div class="tab active" data-mode="body" onclick="switchMode('body')">正文模式</div>
+            <div class="tab" data-mode="opening" onclick="switchMode('opening')">篇首语模式</div>
+        </div>
+
+        <!-- Body -->
+        <div class="tab-content active" id="tc-body">
+            <div class="input-section">
+                <textarea id="input-body" placeholder="在这里粘贴正文内容…&#10;&#10;用空行分隔段落，每段会生成一张图片"></textarea>
+            </div>
+            <div class="settings">
+                <div class="sg"><div class="sg-label"><span>页面宽度</span><span class="v" id="v-cw-body">1080px</span></div>
+                    <input type="range" id="cw-body" min="600" max="1500" step="10" value="1080" oninput="updateSetting('body','canvasWidth',+this.value)"></div>
+                <div class="sg"><div class="sg-label"><span>字体</span></div>
+                    <select id="font-body" onchange="onFontChange('body',this.value)">
+                        <option value="'Noto Serif SC', serif">思源宋体</option>
+                        <option value="'Noto Sans SC', sans-serif" selected>思源黑体</option>
+                        <option value="'LXGW WenKai', cursive">霞鹜文楷</option>
+                        <option value="serif">系统宋体</option>
+                        <option value="sans-serif">系统黑体</option>
+                    </select></div>
+                <div class="sg"><div class="sg-label"><span>字重</span><span class="v" id="v-fw-body">400</span></div>
+                    <select id="fw-body" onchange="updateSetting('body','fontWeight',+this.value)"></select>
+                    <div class="fw-hint">部分字重需字体支持</div></div>
+                <div class="sg"><div class="sg-label"><span>字号</span><span class="v" id="v-font-body">38px</span></div>
+                    <input type="range" id="size-body" min="24" max="56" value="38" oninput="updateSetting('body','fontSize',+this.value)"></div>
+                <div class="sg"><div class="sg-label"><span>字间距</span><span class="v" id="v-ls-body">0px</span></div>
+                    <input type="range" id="ls-body" min="0" max="20" value="0" oninput="updateSetting('body','letterSpacing',+this.value)"></div>
+                <div class="sg"><div class="sg-label"><span>行间距</span><span class="v" id="v-lh-body">2.0</span></div>
+                    <input type="range" id="lh-body" min="10" max="40" value="20" oninput="updateSetting('body','lineHeight',this.value/10)"></div>
+                <div class="sg"><div class="sg-label"><span>页边距</span><span class="v" id="v-sm-body">60px</span></div>
+                    <input type="range" id="sm-body" min="20" max="200" step="5" value="60" oninput="updateSetting('body','sideMargin',+this.value)"></div>
+                <div class="sg"><div class="sg-label"><span>上下留白</span><span class="v" id="v-pl-body">2.0行</span></div>
+                    <input type="range" id="pl-body" min="5" max="60" step="5" value="20" oninput="updateSetting('body','paddingLines',this.value/10)"></div>
+                <div class="sg"><div class="sg-label"><span>对齐方式</span></div>
+                    <div class="align-group" id="align-body">
+                        <button class="align-btn active" data-align="left" onclick="setAlign('body','left')">← 左</button>
+                        <button class="align-btn" data-align="center" onclick="setAlign('body','center')">居中</button>
+                        <button class="align-btn" data-align="right" onclick="setAlign('body','right')">右 →</button>
+                        <button class="align-btn" data-align="justify" onclick="setAlign('body','justify')">两端</button>
+                    </div></div>
+                <div class="sg"><div class="sg-label"><span>字体颜色</span></div>
+                    <div class="color-row"><input type="color" id="color-body" value="#333333" onchange="updateSetting('body','color',this.value)"><span class="color-hex" id="v-color-body">#333333</span></div></div>
+                <!-- 背景设置 body -->
+                <div class="sg" style="border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:14px">
+                    <div class="sg-label" style="margin-bottom:8px"><span>🎨 背景设置</span></div>
+                    <div class="sg"><div class="sg-label"><span>背景颜色</span></div>
+                        <div class="color-row"><input type="color" id="bgcolor-body" value="#ffffff" onchange="updateSetting('body','bgColor',this.value)"><span class="color-hex" id="v-bgcolor-body">#ffffff</span></div></div>
+                    <div style="margin-top:8px"><button class="btn btn-w" style="font-size:11px;padding:6px 10px;flex:none" onclick="document.getElementById('bgimg-body').click()">📷 上传背景图</button>
+                        <input type="file" id="bgimg-body" accept="image/*" style="display:none" onchange="uploadBgImage('body',this)"></div>
+                    <div id="bgimg-info-body" style="display:none;margin-top:6px">
+                        <div style="font-size:11px;color:var(--txt2);margin-bottom:4px">已上传背景图</div>
+                        <div class="filter-group">
+                            <div style="font-size:11px;color:var(--txt2);margin-bottom:6px">基础滤镜</div>
+                            <div class="filter-btns" id="fb-body">
+                                <button class="filter-btn active" data-filter="none" onclick="setBgFilter('body','none')">原图</button>
+                                <button class="filter-btn" data-filter="film" onclick="setBgFilter('body','film')">胶片</button>
+                                <button class="filter-btn" data-filter="vintage" onclick="setBgFilter('body','vintage')">复古</button>
+                                <button class="filter-btn" data-filter="bw" onclick="setBgFilter('body','bw')">黑白</button>
+                                <button class="filter-btn" data-filter="faded" onclick="setBgFilter('body','faded')">褪色</button>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <div style="font-size:11px;color:var(--txt2);margin-bottom:6px">丝网印画</div>
+                            <div class="filter-btns" id="fb2-body">
+                                <button class="filter-btn" data-filter="denim" onclick="setBgFilter('body','denim')">牛仔蓝</button>
+                                <button class="filter-btn" data-filter="vintage-yellow" onclick="setBgFilter('body','vintage-yellow')">复古黄</button>
+                                <button class="filter-btn" data-filter="silkscreen-red" onclick="setBgFilter('body','silkscreen-red')">丝网红</button>
+                                <button class="filter-btn" data-filter="silkscreen-green" onclick="setBgFilter('body','silkscreen-green')">丝网绿</button>
+                                <button class="filter-btn" data-filter="kraft" onclick="setBgFilter('body','kraft')">牛皮纸</button>
+                            </div>
+                        </div>
+                        <div class="sg"><div class="sg-label"><span>亮度</span><span class="v" id="v-bri-body">0</span></div>
+                            <input type="range" id="bri-body" min="-50" max="50" value="0" oninput="setBgAdj('body','brightnessAdj',+this.value)"></div>
+                        <div class="sg"><div class="sg-label"><span>对比度</span><span class="v" id="v-con-body">0</span></div>
+                            <input type="range" id="con-body" min="-50" max="50" value="0" oninput="setBgAdj('body','contrastAdj',+this.value)"></div>
+                        <div class="sg"><div class="sg-label"><span>背景图透明度</span><span class="v" id="v-bgo-body">100%</span></div>
+                            <input type="range" id="bgo-body" min="0" max="100" step="5" value="100" oninput="setBgOpacity('body',+this.value)"></div>
+                        <button class="btn btn-w" style="font-size:10px;padding:4px 8px;flex:none;color:#c0392b" onclick="removeBgImage('body')">✕ 移除背景图</button>
+                    </div>
+                </div>
+                <div class="toggle-row"><span>水印（鞋带二三）</span><div class="toggle on" id="wm-body" onclick="toggleWM('body')"></div></div>
+                <div class="btn-group"><button class="btn btn-p" onclick="generate('body')">生成图片</button></div>
+            </div>
+        </div>
+
+        <!-- Opening -->
+        <div class="tab-content" id="tc-opening">
+            <div class="input-section">
+                <textarea id="input-opening" placeholder="在这里粘贴篇首语…&#10;&#10;建议用不同字体，与正文形成视觉区分"></textarea>
+            </div>
+            <div class="settings">
+                <div class="sg"><div class="sg-label"><span>页面宽度</span><span class="v" id="v-cw-opening">1080px</span></div>
+                    <input type="range" id="cw-opening" min="600" max="1500" step="10" value="1080" oninput="updateSetting('opening','canvasWidth',+this.value)"></div>
+                <div class="sg"><div class="sg-label"><span>字体</span></div>
+                    <select id="font-opening" onchange="onFontChange('opening',this.value)">
+                        <option value="'Noto Serif SC', serif" selected>思源宋体</option>
+                        <option value="'Noto Sans SC', sans-serif">思源黑体</option>
+                        <option value="'LXGW WenKai', cursive">霞鹜文楷</option>
+                        <option value="serif">系统宋体</option>
+                        <option value="sans-serif">系统黑体</option>
+                    </select></div>
+                <div class="sg"><div class="sg-label"><span>字重</span><span class="v" id="v-fw-opening">400</span></div>
+                    <select id="fw-opening" onchange="updateSetting('opening','fontWeight',+this.value)"></select>
+                    <div class="fw-hint">部分字重需字体支持</div></div>
+                <div class="sg"><div class="sg-label"><span>字号</span><span class="v" id="v-font-opening">36px</span></div>
+                    <input type="range" id="size-opening" min="24" max="56" value="36" oninput="updateSetting('opening','fontSize',+this.value)"></div>
+                <div class="sg"><div class="sg-label"><span>字间距</span><span class="v" id="v-ls-opening">2px</span></div>
+                    <input type="range" id="ls-opening" min="0" max="20" value="2" oninput="updateSetting('opening','letterSpacing',+this.value)"></div>
+                <div class="sg"><div class="sg-label"><span>行间距</span><span class="v" id="v-lh-opening">2.2</span></div>
+                    <input type="range" id="lh-opening" min="10" max="40" value="22" oninput="updateSetting('opening','lineHeight',this.value/10)"></div>
+                <div class="sg"><div class="sg-label"><span>页边距</span><span class="v" id="v-sm-opening">60px</span></div>
+                    <input type="range" id="sm-opening" min="20" max="200" step="5" value="60" oninput="updateSetting('opening','sideMargin',+this.value)"></div>
+                <div class="sg"><div class="sg-label"><span>上下留白</span><span class="v" id="v-pl-opening">2.0行</span></div>
+                    <input type="range" id="pl-opening" min="5" max="60" step="5" value="20" oninput="updateSetting('opening','paddingLines',this.value/10)"></div>
+                <div class="sg"><div class="sg-label"><span>对齐方式</span></div>
+                    <div class="align-group" id="align-opening">
+                        <button class="align-btn" data-align="left" onclick="setAlign('opening','left')">← 左</button>
+                        <button class="align-btn active" data-align="center" onclick="setAlign('opening','center')">居中</button>
+                        <button class="align-btn" data-align="right" onclick="setAlign('opening','right')">右 →</button>
+                        <button class="align-btn" data-align="justify" onclick="setAlign('opening','justify')">两端</button>
+                    </div></div>
+                <div class="sg"><div class="sg-label"><span>字体颜色</span></div>
+                    <div class="color-row"><input type="color" id="color-opening" value="#666666" onchange="updateSetting('opening','color',this.value)"><span class="color-hex" id="v-color-opening">#666666</span></div></div>
+                <!-- 背景设置 opening -->
+                <div class="sg" style="border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:14px">
+                    <div class="sg-label" style="margin-bottom:8px"><span>🎨 背景设置</span></div>
+                    <div class="sg"><div class="sg-label"><span>背景颜色</span></div>
+                        <div class="color-row"><input type="color" id="bgcolor-opening" value="#ffffff" onchange="updateSetting('opening','bgColor',this.value)"><span class="color-hex" id="v-bgcolor-opening">#ffffff</span></div></div>
+                    <div style="margin-top:8px"><button class="btn btn-w" style="font-size:11px;padding:6px 10px;flex:none" onclick="document.getElementById('bgimg-opening').click()">📷 上传背景图</button>
+                        <input type="file" id="bgimg-opening" accept="image/*" style="display:none" onchange="uploadBgImage('opening',this)"></div>
+                    <div id="bgimg-info-opening" style="display:none;margin-top:6px">
+                        <div style="font-size:11px;color:var(--txt2);margin-bottom:4px">已上传背景图</div>
+                        <div class="filter-group">
+                            <div style="font-size:11px;color:var(--txt2);margin-bottom:6px">基础滤镜</div>
+                            <div class="filter-btns" id="fb-opening">
+                                <button class="filter-btn active" data-filter="none" onclick="setBgFilter('opening','none')">原图</button>
+                                <button class="filter-btn" data-filter="film" onclick="setBgFilter('opening','film')">胶片</button>
+                                <button class="filter-btn" data-filter="vintage" onclick="setBgFilter('opening','vintage')">复古</button>
+                                <button class="filter-btn" data-filter="bw" onclick="setBgFilter('opening','bw')">黑白</button>
+                                <button class="filter-btn" data-filter="faded" onclick="setBgFilter('opening','faded')">褪色</button>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <div style="font-size:11px;color:var(--txt2);margin-bottom:6px">丝网印画</div>
+                            <div class="filter-btns" id="fb2-opening">
+                                <button class="filter-btn" data-filter="denim" onclick="setBgFilter('opening','denim')">牛仔蓝</button>
+                                <button class="filter-btn" data-filter="vintage-yellow" onclick="setBgFilter('opening','vintage-yellow')">复古黄</button>
+                                <button class="filter-btn" data-filter="silkscreen-red" onclick="setBgFilter('opening','silkscreen-red')">丝网红</button>
+                                <button class="filter-btn" data-filter="silkscreen-green" onclick="setBgFilter('opening','silkscreen-green')">丝网绿</button>
+                                <button class="filter-btn" data-filter="kraft" onclick="setBgFilter('opening','kraft')">牛皮纸</button>
+                            </div>
+                        </div>
+                        <div class="sg"><div class="sg-label"><span>亮度</span><span class="v" id="v-bri-opening">0</span></div>
+                            <input type="range" id="bri-opening" min="-50" max="50" value="0" oninput="setBgAdj('opening','brightnessAdj',+this.value)"></div>
+                        <div class="sg"><div class="sg-label"><span>对比度</span><span class="v" id="v-con-opening">0</span></div>
+                            <input type="range" id="con-opening" min="-50" max="50" value="0" oninput="setBgAdj('opening','contrastAdj',+this.value)"></div>
+                        <div class="sg"><div class="sg-label"><span>背景图透明度</span><span class="v" id="v-bgo-opening">100%</span></div>
+                            <input type="range" id="bgo-opening" min="0" max="100" step="5" value="100" oninput="setBgOpacity('opening',+this.value)"></div>
+                        <button class="btn btn-w" style="font-size:10px;padding:4px 8px;flex:none;color:#c0392b" onclick="removeBgImage('opening')">✕ 移除背景图</button>
+                    </div>
+                </div>
+                <div class="toggle-row"><span>水印（鞋带二三）</span><div class="toggle on" id="wm-opening" onclick="toggleWM('opening')"></div></div>
+                <div class="btn-group"><button class="btn btn-p" onclick="generate('opening')">生成图片</button></div>
+            </div>
+        </div>
+
+        <!-- Presets -->
+        <div class="preset-section">
+            <div class="preset-title">格式预设</div>
+            <button class="preset-save-btn" onclick="savePreset()">+ 保存当前格式</button>
+            <div class="preset-list" id="presetList"></div>
+        </div>
+
+        <div style="padding:12px 24px 8px;border-top:1px solid var(--bd);display:flex;gap:6px;flex-shrink:0">
+            <button class="btn btn-s" onclick="openSaveModal()" style="flex:1">💾 保存文章</button>
+            <button class="btn btn-w" onclick="openLibModal()" style="flex:1">📂 文章库</button>
+        </div>
+        <div class="backup-bar">
+            <button class="btn btn-w" onclick="exportData()">📤 导出数据</button>
+            <button class="btn btn-w" onclick="document.getElementById('importFile').click()">📥 导入数据</button>
+            <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+        </div>
+    </div>
+
+    <!-- Right -->
+    <div class="right">
+        <div class="toolbar">
+            <span class="info" id="countInfo">暂无图片</span>
+            <div class="actions">
+                <button class="btn btn-s" onclick="previewAll()">📱 预览</button>
+                <button class="btn btn-s" onclick="openDlModal()">📦 下载</button>
+            </div>
+        </div>
+        <div class="gallery" id="gallery">
+            <div class="empty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="9"/></svg>
+                <p>粘贴文字，点击「生成图片」</p>
+                <div class="hint">支持正文和篇首语两种模式分别生成</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Panel (slide from right) -->
+<div class="edit-overlay" id="editOverlay" onclick="closeEdit()"></div>
+<div class="edit-panel" id="editPanel">
+    <div class="edit-header">
+        <h3 id="editTitle">编辑图片</h3>
+        <button class="close-btn" onclick="closeEdit()">✕</button>
+    </div>
+    <div class="edit-preview" id="editPreview">
+        <div class="guide-line guide-v" id="guideCenter" style="left:50%"></div>
+        <div class="guide-line guide-v" id="guideLeft"></div>
+        <div class="guide-line guide-v" id="guideRight"></div>
+        <div class="guide-line guide-h" id="guideTop"></div>
+    </div>
+    <div style="padding:12px 20px;border-bottom:1px solid var(--bd);flex-shrink:0">
+        <div style="font-size:11px;color:var(--txt2);margin-bottom:4px">段落文字 <span style="color:#bbb">（修改后同步到左侧总文字栏）</span></div>
+        <textarea id="ed-text" style="width:100%;height:80px;border:1px solid var(--bd);border-radius:6px;padding:10px;font-size:13px;line-height:1.6;font-family:inherit;outline:none;resize:vertical" oninput="editTextChange(this.value)"></textarea>
+    </div>
+    <div class="edit-settings">
+        <div class="sg"><div class="sg-label"><span>页面宽度</span><span class="v" id="ed-v-cw">1080px</span></div>
+            <input type="range" id="ed-cw" min="600" max="1500" step="10" value="1080" oninput="editChange('canvasWidth',+this.value)"></div>
+        <div class="sg"><div class="sg-label"><span>字体</span></div>
+            <select id="ed-font" onchange="onEditFontChange(this.value)">
+                <option value="'Noto Serif SC', serif">思源宋体</option>
+                <option value="'Noto Sans SC', sans-serif">思源黑体</option>
+                <option value="'LXGW WenKai', cursive">霞鹜文楷</option>
+                <option value="serif">系统宋体</option>
+                <option value="sans-serif">系统黑体</option>
+            </select></div>
+        <div class="sg"><div class="sg-label"><span>字重</span><span class="v" id="ed-v-fw">400</span></div>
+            <select id="ed-fw" onchange="editChange('fontWeight',+this.value)"></select>
+            <div class="fw-hint">部分字重需字体支持</div></div>
+        <div class="sg"><div class="sg-label"><span>字号</span><span class="v" id="ed-v-size">38px</span></div>
+            <input type="range" id="ed-size" min="16" max="72" value="38" oninput="editChange('fontSize',+this.value)"></div>
+        <div class="sg"><div class="sg-label"><span>字间距</span><span class="v" id="ed-v-ls">0px</span></div>
+            <input type="range" id="ed-ls" min="0" max="20" value="0" oninput="editChange('letterSpacing',+this.value)"></div>
+        <div class="sg"><div class="sg-label"><span>行间距</span><span class="v" id="ed-v-lh">2.0</span></div>
+            <input type="range" id="ed-lh" min="10" max="40" value="20" oninput="editChange('lineHeight',this.value/10)"></div>
+        <div class="sg"><div class="sg-label"><span>页边距</span><span class="v" id="ed-v-sm">60px</span></div>
+            <input type="range" id="ed-sm" min="20" max="200" step="5" value="60" oninput="editChange('sideMargin',+this.value)"></div>
+        <div class="sg"><div class="sg-label"><span>上下留白</span><span class="v" id="ed-v-pl">2.0行</span></div>
+            <input type="range" id="ed-pl" min="5" max="60" step="5" value="20" oninput="editChange('paddingLines',this.value/10)"></div>
+        <div class="sg"><div class="sg-label"><span>对齐方式</span></div>
+            <div class="align-group" id="ed-align">
+                <button class="align-btn active" data-align="left" onclick="editSetAlign('left')">← 左</button>
+                <button class="align-btn" data-align="center" onclick="editSetAlign('center')">居中</button>
+                <button class="align-btn" data-align="right" onclick="editSetAlign('right')">右 →</button>
+                <button class="align-btn" data-align="justify" onclick="editSetAlign('justify')">两端</button>
+            </div></div>
+        <div class="sg"><div class="sg-label"><span>字体颜色</span></div>
+            <div class="color-row"><input type="color" id="ed-color" value="#333333" oninput="editChange('color',this.value)"><span class="color-hex" id="ed-v-color">#333333</span></div></div>
+        <!-- 编辑面板背景设置 -->
+        <div class="sg" style="border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:14px">
+            <div class="sg-label" style="margin-bottom:8px"><span>🎨 背景设置</span></div>
+            <div class="sg"><div class="sg-label"><span>背景颜色</span></div>
+                <div class="color-row"><input type="color" id="ed-bgcolor" value="#ffffff" oninput="editChange('bgColor',this.value)"><span class="color-hex" id="ed-v-bgcolor">#ffffff</span></div></div>
+            <div style="margin-top:8px"><button class="btn btn-w" style="font-size:11px;padding:6px 10px;flex:none" onclick="document.getElementById('ed-bgimg').click()">📷 上传背景图</button>
+                <input type="file" id="ed-bgimg" accept="image/*" style="display:none" onchange="uploadBgImageEdit(this)"></div>
+            <div id="ed-bgimg-info" style="display:none;margin-top:6px">
+                <div style="font-size:11px;color:var(--txt2);margin-bottom:4px">已上传背景图</div>
+                <div class="filter-group">
+                    <div style="font-size:11px;color:var(--txt2);margin-bottom:6px">基础滤镜</div>
+                    <div class="filter-btns" id="fb-edit">
+                        <button class="filter-btn active" data-filter="none" onclick="setBgFilterEdit('none')">原图</button>
+                        <button class="filter-btn" data-filter="film" onclick="setBgFilterEdit('film')">胶片</button>
+                        <button class="filter-btn" data-filter="vintage" onclick="setBgFilterEdit('vintage')">复古</button>
+                        <button class="filter-btn" data-filter="bw" onclick="setBgFilterEdit('bw')">黑白</button>
+                        <button class="filter-btn" data-filter="faded" onclick="setBgFilterEdit('faded')">褪色</button>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <div style="font-size:11px;color:var(--txt2);margin-bottom:6px">丝网印画</div>
+                    <div class="filter-btns" id="fb2-edit">
+                        <button class="filter-btn" data-filter="denim" onclick="setBgFilterEdit('denim')">牛仔蓝</button>
+                        <button class="filter-btn" data-filter="vintage-yellow" onclick="setBgFilterEdit('vintage-yellow')">复古黄</button>
+                        <button class="filter-btn" data-filter="silkscreen-red" onclick="setBgFilterEdit('silkscreen-red')">丝网红</button>
+                        <button class="filter-btn" data-filter="silkscreen-green" onclick="setBgFilterEdit('silkscreen-green')">丝网绿</button>
+                        <button class="filter-btn" data-filter="kraft" onclick="setBgFilterEdit('kraft')">牛皮纸</button>
+                    </div>
+                </div>
+                <div class="sg"><div class="sg-label"><span>亮度</span><span class="v" id="ed-v-bri">0</span></div>
+                    <input type="range" id="ed-bri" min="-50" max="50" value="0" oninput="editBgAdj('brightnessAdj',+this.value)"></div>
+                <div class="sg"><div class="sg-label"><span>对比度</span><span class="v" id="ed-v-con">0</span></div>
+                    <input type="range" id="ed-con" min="-50" max="50" value="0" oninput="editBgAdj('contrastAdj',+this.value)"></div>
+                <div class="sg"><div class="sg-label"><span>背景图透明度</span><span class="v" id="ed-v-bgo">100%</span></div>
+                    <input type="range" id="ed-bgo" min="0" max="100" step="5" value="100" oninput="editBgOpacity(+this.value)"></div>
+                <button class="btn btn-w" style="font-size:10px;padding:4px 8px;flex:none;color:#c0392b" onclick="removeBgImageEdit()">✕ 移除背景图</button>
+            </div>
+        </div>
+        <div class="toggle-row"><span>水印</span><div class="toggle on" id="ed-wm" onclick="editToggleWM()"></div></div>
+        <div style="margin-top:4px"><span class="rst" style="font-size:12px;color:#aaa;cursor:pointer;text-decoration:underline" onclick="editReset()">恢复默认参数</span></div>
+    </div>
+    <div class="edit-footer">
+        <button class="btn btn-w" onclick="editMove(-1)">← 上移</button>
+        <button class="btn btn-w" onclick="editMove(1)">下移 →</button>
+        <button class="btn btn-s" onclick="editDownload()">⬇ 下载</button>
+        <button class="btn btn-p" style="background:#c0392b" onclick="editDelete()">删除</button>
+    </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal-bg" id="previewModal" onclick="if(event.target===this)this.classList.remove('show')">
+    <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="phone"><div class="phone-bar">公众号文章预览</div><div class="phone-body" id="previewBody"></div></div>
+        <button class="phone-close" onclick="document.getElementById('previewModal').classList.remove('show')">关闭预览</button>
+    </div>
+</div>
+
+<!-- Save Modal -->
+<div class="save-overlay" id="saveOverlay">
+    <div class="save-modal">
+        <h3>💾 保存文章</h3>
+        <input type="text" id="saveTitle" placeholder="输入文章标题（如：漫步东山口）">
+        <div class="btn-group">
+            <button class="btn btn-p" onclick="doSaveArticle()">保存</button>
+            <button class="btn btn-w" onclick="closeSaveModal()">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- Library Modal -->
+<div class="lib-overlay" id="libOverlay">
+    <div class="lib-modal">
+        <div class="lib-header">
+            <h2>📂 文章库</h2>
+            <button class="close-btn" onclick="closeLibModal()">✕</button>
+        </div>
+        <div class="lib-body" id="libBody"></div>
+    </div>
+</div>
+
+<!-- Download Select Modal -->
+<div class="dl-overlay" id="dlOverlay">
+    <div class="dl-modal">
+        <div class="dl-header">
+            <h3>选择下载图片</h3>
+            <button class="close-btn" onclick="closeDlModal()" style="width:28px;height:28px;border:none;border-radius:50%;background:var(--ac2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--txt2)">✕</button>
+        </div>
+        <div class="dl-toolbar">
+            <label style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="dlSelectAll" checked onchange="toggleDlSelectAll(this.checked)"> 全选
+            </label>
+            <span style="font-size:12px;color:#888" id="dlCount">已选 0 张</span>
+        </div>
+        <div class="dl-grid" id="dlGrid"></div>
+        <div class="dl-footer">
+            <button class="btn btn-w" onclick="closeDlModal()">取消</button>
+            <button class="btn btn-p" onclick="confirmDownload()">确认下载</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════
+   MuseSet排云 · 公众号排版工具 v3.4
+   ═══════════════════════════════════════════ */
+
+// ── Password Gate ──
+const ACCESS_PWD = 'Treestar202601';
+
+function checkPassword() {
+    const input = document.getElementById('pwdInput').value;
+    if (input === ACCESS_PWD) {
+        document.getElementById('passwordGate').style.display = 'none';
+        sessionStorage.setItem('museset_auth', '1');
+    } else {
+        document.getElementById('pwdError').style.display = 'block';
+        document.getElementById('pwdInput').value = '';
+        document.getElementById('pwdInput').focus();
+    }
+}
+
+// Check if already authenticated
+if (sessionStorage.getItem('museset_auth') === '1') {
+    document.getElementById('passwordGate').style.display = 'none';
+}
+
+// Enter key support
+document.getElementById('pwdInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') checkPassword();
+});
+
+const NOTE_COLORS = ['#5B8C5A','#D4A373','#6B8E9B','#C17767','#8B7BB5','#B5A36B','#7B9EA8','#A87B7B'];
+
+// Font weight maps
+const FONT_WEIGHTS = {
+    "'Noto Serif SC', serif": [200,300,400,500,600,700],
+    "'Noto Sans SC', sans-serif": [300,400,500,700],
+    "'LXGW WenKai', cursive": [300,400,700],
+    "serif": [400,700],
+    "sans-serif": [400,700]
+};
+
+const S = {
+    body:    { canvasWidth:1080, fontFamily:"'Noto Sans SC', sans-serif", fontSize:38, fontWeight:400, letterSpacing:0, lineHeight:2.0, color:'#333333', watermark:true, sideMargin:60, textAlign:'left', paddingLines:2, bgColor:'#ffffff', bgImage:null, bgFilter:'none', brightnessAdj:0, contrastAdj:0, bgOpacity:100 },
+    opening: { canvasWidth:1080, fontFamily:"'Noto Serif SC', serif",    fontSize:36, fontWeight:400, letterSpacing:2, lineHeight:2.2, color:'#666666', watermark:true, sideMargin:60, textAlign:'center', paddingLines:2, bgColor:'#ffffff', bgImage:null, bgFilter:'none', brightnessAdj:0, contrastAdj:0, bgOpacity:100 }
+};
+
+let images = [];   // { id, mode, text, settings, box:{x,y,width,align}, canvas, edited }
+let editIdx = -1;
+let currentArticleId = (function() {
+    const stored = sessionStorage.getItem('xd23_currentArticleId');
+    return stored ? parseInt(stored) : null;
+})();
+
+function setCurrentArticleId(id) {
+    currentArticleId = id;
+    if (id) sessionStorage.setItem('xd23_currentArticleId', id.toString());
+    else sessionStorage.removeItem('xd23_currentArticleId');
+}
+
+// ── Init ──
+document.fonts.ready.then(() => setTimeout(() => document.getElementById('loadingOverlay').classList.add('hidden'), 500));
+// Init font weight dropdowns
+['body','opening'].forEach(m => populateFontWeights(m, S[m].fontFamily, S[m].fontWeight));
+renderPresetList();
+
+// ── Tabs ──
+function switchMode(m) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.mode === m));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.id === 'tc-' + m));
+}
+
+// ── Font weight helpers ──
+function populateFontWeights(mode, fontFamily, selectedWeight) {
+    const sel = document.getElementById('fw-' + mode);
+    const weights = FONT_WEIGHTS[fontFamily] || [400, 700];
+    sel.innerHTML = '';
+    weights.forEach(w => {
+        const o = document.createElement('option');
+        o.value = w; o.textContent = w;
+        if (w === selectedWeight) o.selected = true;
+        sel.appendChild(o);
+    });
+    // If selected weight not available, pick closest
+    if (!weights.includes(selectedWeight)) {
+        let closest = weights.reduce((a,b) => Math.abs(b - selectedWeight) < Math.abs(a - selectedWeight) ? b : a);
+        sel.value = closest;
+        S[mode].fontWeight = closest;
+        document.getElementById('v-fw-' + mode).textContent = closest;
+    }
+}
+
+function onFontChange(mode, fontFamily) {
+    S[mode].fontFamily = fontFamily;
+    populateFontWeights(mode, fontFamily, S[mode].fontWeight);
+    autoRender();
+}
+
+// ── Align helpers ──
+function setAlign(mode, align) {
+    S[mode].textAlign = align;
+    const grp = document.getElementById('align-' + mode);
+    grp.querySelectorAll('.align-btn').forEach(b => b.classList.toggle('active', b.dataset.align === align));
+    autoRender();
+}
+
+// ── Global Settings ──
+function updateSetting(mode, key, val) {
+    S[mode][key] = val;
+    const fmt = { canvasWidth: v => v+'px', fontSize: v => v+'px', letterSpacing: v => v+'px', lineHeight: v => v.toFixed(1), color: v => v, fontWeight: v => ''+v, sideMargin: v => v+'px', paddingLines: v => v.toFixed(1)+'行', bgColor: v => v };
+    const ids = { canvasWidth:'v-cw-', fontSize:'v-font-', letterSpacing:'v-ls-', lineHeight:'v-lh-', color:'v-color-', fontWeight:'v-fw-', sideMargin:'v-sm-', paddingLines:'v-pl-', bgColor:'v-bgcolor-' };
+    if (ids[key] && document.getElementById(ids[key] + mode)) document.getElementById(ids[key] + mode).textContent = fmt[key](val);
+    autoRender();
+}
+function toggleWM(mode) {
+    S[mode].watermark = !S[mode].watermark;
+    document.getElementById('wm-' + mode).classList.toggle('on', S[mode].watermark);
+    autoRender();
+}
+// ── 背景图相关函数 ──
+// ── 背景图缓存 ──
+const bgImageCache = {};
+function getBgImage(src) {
+    if (!bgImageCache[src]) {
+        const img = new Image();
+        img.src = src;
+        bgImageCache[src] = img;
+    }
+    return bgImageCache[src];
+}
+
+// ── 滤镜预设 ──
+const FILTERS = {
+    'none': { name: '原图', filter: 'none', overlay: null },
+    'film': { name: '胶片', filter: 'contrast(1.1) saturate(0.85) sepia(0.15) brightness(1.05)', overlay: null },
+    'vintage': { name: '复古', filter: 'sepia(0.4) contrast(0.9) brightness(0.95) saturate(0.7)', overlay: null },
+    'bw': { name: '黑白', filter: 'grayscale(1) contrast(1.1)', overlay: null },
+    'faded': { name: '褪色', filter: 'saturate(0.5) contrast(0.85) brightness(1.1)', overlay: null },
+    // 丝网印画系列
+    'denim': { name: '牛仔蓝', filter: 'grayscale(0.7) contrast(1.2) brightness(0.95)', overlay: 'rgba(70,130,180,0.3)' },
+    'vintage-yellow': { name: '复古黄', filter: 'grayscale(0.5) sepia(0.3) contrast(1.1) brightness(1.05)', overlay: 'rgba(218,165,32,0.25)' },
+    'silkscreen-red': { name: '丝网红', filter: 'grayscale(0.8) contrast(1.3) brightness(0.9)', overlay: 'rgba(178,34,34,0.3)' },
+    'silkscreen-green': { name: '丝网绿', filter: 'grayscale(0.7) contrast(1.2) brightness(0.95)', overlay: 'rgba(60,120,80,0.3)' },
+    'kraft': { name: '牛皮纸', filter: 'sepia(0.5) saturate(0.6) contrast(0.95) brightness(1.1)', overlay: 'rgba(160,120,80,0.25)' }
+};
+
+const FILTER_MAP = FILTERS; // backward compat
+
+function uploadBgImage(mode, input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        S[mode].bgImage = e.target.result;
+        S[mode]._bgImgEl = null; // 清除缓存
+        // 预加载图片
+        const img = new Image();
+        img.onload = function() {
+            img._src = e.target.result;
+            S[mode]._bgImgEl = img;
+            document.getElementById('bgimg-info-' + mode).style.display = 'block';
+            autoRender();
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+}
+
+function setBgFilter(mode, filter) {
+    S[mode].bgFilter = filter;
+    // Update active state on filter buttons
+    ['fb-' + mode, 'fb2-' + mode].forEach(groupId => {
+        const group = document.getElementById(groupId);
+        if (group) group.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === filter));
+    });
+    autoRender();
+}
+
+function setBgOpacity(mode, val) {
+    S[mode].bgOpacity = val;
+    document.getElementById('v-bgo-' + mode).textContent = val + '%';
+    autoRender();
+}
+
+function setBgAdj(mode, key, val) {
+    S[mode][key] = val;
+    document.getElementById('v-' + (key === 'brightnessAdj' ? 'bri-' : 'con-') + mode).textContent = val;
+    autoRender();
+}
+
+function removeBgImage(mode) {
+    S[mode].bgImage = null;
+    S[mode]._bgImgEl = null;
+    S[mode].bgFilter = 'none';
+    S[mode].brightnessAdj = 0;
+    S[mode].contrastAdj = 0;
+    S[mode].bgOpacity = 100;
+    document.getElementById('bgimg-info-' + mode).style.display = 'none';
+    autoRender();
+}
+
+function uploadBgImageEdit(input) {
+    if (editIdx < 0) return;
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = images[editIdx];
+        img.settings.bgImage = e.target.result;
+        img.settings._bgImgEl = null;
+        const bgImg = new Image();
+        bgImg.onload = function() {
+            bgImg._src = e.target.result;
+            img.settings._bgImgEl = bgImg;
+            img.edited = true;
+            document.getElementById('ed-bgimg-info').style.display = 'block';
+            img.canvas = doRender(img.text, img.settings, img.box);
+            updateEditPreview();
+            updateCardInGallery(editIdx);
+        };
+        bgImg.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+}
+
+function setBgFilterEdit(filter) {
+    if (editIdx < 0) return;
+    images[editIdx].settings.bgFilter = filter;
+    images[editIdx].edited = true;
+    // Update active state on edit panel filter buttons
+    ['fb-edit', 'fb2-edit'].forEach(groupId => {
+        const group = document.getElementById(groupId);
+        if (group) group.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === filter));
+    });
+    images[editIdx].canvas = doRender(images[editIdx].text, images[editIdx].settings, images[editIdx].box);
+    updateEditPreview();
+    updateCardInGallery(editIdx);
+}
+
+function editBgOpacity(val) {
+    if (editIdx < 0) return;
+    images[editIdx].settings.bgOpacity = val;
+    images[editIdx].edited = true;
+    document.getElementById('ed-v-bgo').textContent = val + '%';
+    images[editIdx].canvas = doRender(images[editIdx].text, images[editIdx].settings, images[editIdx].box);
+    updateEditPreview();
+    updateCardInGallery(editIdx);
+}
+
+function editBgAdj(key, val) {
+    if (editIdx < 0) return;
+    images[editIdx].settings[key] = val;
+    images[editIdx].edited = true;
+    document.getElementById('ed-v-' + (key === 'brightnessAdj' ? 'bri' : 'con')).textContent = val;
+    images[editIdx].canvas = doRender(images[editIdx].text, images[editIdx].settings, images[editIdx].box);
+    updateEditPreview();
+    updateCardInGallery(editIdx);
+}
+
+function removeBgImageEdit() {
+    if (editIdx < 0) return;
+    const img = images[editIdx];
+    img.settings.bgImage = null;
+    img.settings._bgImgEl = null;
+    img.settings.bgFilter = 'none';
+    img.settings.brightnessAdj = 0;
+    img.settings.contrastAdj = 0;
+    img.settings.bgOpacity = 100;
+    img.edited = true;
+    document.getElementById('ed-bgimg-info').style.display = 'none';
+    img.canvas = doRender(img.text, img.settings, img.box);
+    updateEditPreview();
+    updateCardInGallery(editIdx);
+}
+
+function autoRender() {
+    images.forEach(img => {
+        if (!img.edited) {
+            img.settings = {...S[img.mode]};
+            // 复制背景图引用
+            if (S[img.mode].bgImage) {
+                img.settings.bgImage = S[img.mode].bgImage;
+                img.settings._bgImgEl = S[img.mode]._bgImgEl;
+            }
+            if (!img.box) img.box = defaultBox(img.settings);
+            img.canvas = doRender(img.text, img.settings, img.box);
+        }
+    });
+    renderGallery();
+}
+
+function defaultBox(cfg) {
+    const sm = cfg.sideMargin || 60;
+    return { x: sm, y: 0, width: (cfg.canvasWidth || 1080) - sm * 2, align: cfg.textAlign || 'left' };
+}
+
+// ── Canvas Render ──
+function doRender(text, cfg, box) {
+    const CW = cfg.canvasWidth || 1080;
+    const fs = cfg.fontSize;
+    const fw = cfg.fontWeight || 400;
+    const ls = cfg.letterSpacing;
+    const lh = fs * cfg.lineHeight;
+    const PAD = lh * (cfg.paddingLines || 2);
+    const sideMargin = cfg.sideMargin || 60;
+    const align = (box && box.align) || cfg.textAlign || 'left';
+    const boxX = (box && box.x !== undefined) ? box.x : sideMargin;
+    const boxY = (box && box.y !== undefined) ? box.y : 0;
+    const boxWidth = (box && box.width) ? box.width : (CW - sideMargin * 2);
+
+    const c = document.createElement('canvas'); c.width = CW;
+    const ctx = c.getContext('2d');
+    const font = fw + ' ' + fs + 'px ' + cfg.fontFamily;
+    ctx.font = font;
+    const cw = {};
+    for (const ch of text) if (!cw[ch]) cw[ch] = ctx.measureText(ch).width;
+    const maxW = boxWidth;
+    const lines = [];
+    for (const para of text.split('\n')) {
+        if (!para.trim()) { lines.push(''); continue; }
+        let cur = '', w = 0;
+        for (const ch of para) {
+            const w0 = cw[ch] || 0, add = w0 + (cur ? ls : 0);
+            if (w + add > maxW && cur) { lines.push(cur); cur = ch; w = w0; }
+            else { cur += ch; w += add; }
+        }
+        if (cur) lines.push(cur);
+    }
+    const cH = PAD * 2 + boxY + lines.length * lh; c.height = cH;
+    // 背景绘制
+    if (cfg.bgImage) {
+        // 有背景图：确保图片已加载（使用缓存）
+        if (!cfg._bgImgEl || !cfg._bgImgEl._src) {
+            const cached = getBgImage(cfg.bgImage);
+            if (!cached._src) cached._src = cfg.bgImage;
+            cfg._bgImgEl = cached;
+        }
+        if (cfg._bgImgEl && cfg._bgImgEl.complete && cfg._bgImgEl.naturalWidth > 0) {
+            // 应用透明度
+            const opacity = (cfg.bgOpacity != null ? cfg.bgOpacity : 100) / 100;
+            ctx.save();
+            ctx.globalAlpha = opacity;
+            // 应用滤镜
+            const brightness = 1 + (cfg.brightnessAdj || 0) / 100;
+            const contrast = 1 + (cfg.contrastAdj || 0) / 100;
+            const filterDef = FILTERS[cfg.bgFilter] || FILTERS['none'];
+            const baseFilter = filterDef.filter !== 'none' ? filterDef.filter : '';
+            const filterStr = (baseFilter ? baseFilter + ' ' : '') + 'brightness(' + brightness + ') contrast(' + contrast + ')';
+            ctx.filter = filterStr;
+            // cover模式：裁剪填满
+            const imgRatio = cfg._bgImgEl.naturalWidth / cfg._bgImgEl.naturalHeight;
+            const canvasRatio = CW / cH;
+            let sx = 0, sy = 0, sw = cfg._bgImgEl.naturalWidth, sh = cfg._bgImgEl.naturalHeight;
+            if (imgRatio > canvasRatio) {
+                sw = cfg._bgImgEl.naturalHeight * canvasRatio;
+                sx = (cfg._bgImgEl.naturalWidth - sw) / 2;
+            } else {
+                sh = cfg._bgImgEl.naturalWidth / canvasRatio;
+                sy = (cfg._bgImgEl.naturalHeight - sh) / 2;
+            }
+            ctx.drawImage(cfg._bgImgEl, sx, sy, sw, sh, 0, 0, CW, cH);
+            ctx.restore();
+            // 如果有颜色叠加（丝网印画效果）
+            if (filterDef.overlay) {
+                ctx.save();
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.fillStyle = filterDef.overlay;
+                ctx.fillRect(0, 0, CW, cH);
+                ctx.restore();
+            }
+        } else {
+            ctx.fillStyle = cfg.bgColor || '#fff'; ctx.fillRect(0, 0, CW, cH);
+        }
+    } else {
+        ctx.fillStyle = cfg.bgColor || '#fff'; ctx.fillRect(0, 0, CW, cH);
+    }
+    ctx.font = font; ctx.fillStyle = cfg.color; ctx.textBaseline = 'top';
+    lines.forEach((line, i) => {
+        if (!line) return;
+        const y = PAD + boxY + i * lh;
+        if (align === 'center') {
+            let lineW = 0;
+            for (const ch of line) lineW += (cw[ch] || 0) + ls;
+            lineW -= ls;
+            let cx = boxX + (boxWidth - lineW) / 2;
+            for (const ch of line) { ctx.fillText(ch, cx, y); cx += (cw[ch] || 0) + ls; }
+        } else if (align === 'right') {
+            let lineW = 0;
+            for (const ch of line) lineW += (cw[ch] || 0) + ls;
+            lineW -= ls;
+            let cx = boxX + boxWidth - lineW;
+            for (const ch of line) { ctx.fillText(ch, cx, y); cx += (cw[ch] || 0) + ls; }
+        } else if (align === 'justify' && i < lines.length - 1) {
+            let totalCharW = 0;
+            for (const ch of line) totalCharW += (cw[ch] || 0);
+            const charCount = line.length;
+            const spaceW = charCount > 1 ? (boxWidth - totalCharW) / (charCount - 1) : 0;
+            let cx = boxX;
+            for (let j = 0; j < line.length; j++) {
+                ctx.fillText(line[j], cx, y);
+                cx += (cw[line[j]] || 0) + (j < line.length - 1 ? spaceW : 0);
+            }
+        } else {
+            // left
+            let cx = boxX;
+            for (const ch of line) { ctx.fillText(ch, cx, y); cx += (cw[ch] || 0) + ls; }
+        }
+    });
+    // Watermark
+    if (cfg.watermark) {
+        ctx.save(); ctx.font = '16px sans-serif'; ctx.fillStyle = 'rgba(0,0,0,0.025)'; ctx.textBaseline = 'top';
+        for (let y = 10; y < cH; y += 100)
+            for (let x = -40; x < CW; x += 220) { ctx.save(); ctx.translate(x, y); ctx.rotate(-0.26); ctx.fillText('鞋带二三', 0, 0); ctx.restore(); }
+        ctx.restore();
+    }
+    return c;
+}
+
+// ── Generate (REPLACE mode) ──
+function generate(mode) {
+    const text = document.getElementById('input-' + mode).value.trim();
+    if (!text) { alert('请先输入文字'); return; }
+    const paras = text.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+    const newImgs = paras.map(t => {
+        const imgSettings = {...S[mode]};
+        if (S[mode].bgImage) {
+            imgSettings.bgImage = S[mode].bgImage;
+            imgSettings._bgImgEl = S[mode]._bgImgEl;
+        }
+        return {
+            id: Date.now() + Math.random(), mode, text: t,
+            settings: imgSettings,
+            box: defaultBox(imgSettings),
+            canvas: doRender(t, imgSettings, defaultBox(imgSettings)),
+            edited: false
+        };
+    });
+    const other = images.filter(i => i.mode !== mode);
+    if (mode === 'opening') images = [...newImgs, ...other];
+    else images = [...other, ...newImgs];
+    renderGallery();
+}
+
+// ── Gallery ──
+function renderGallery() {
+    const g = document.getElementById('gallery');
+    if (!images.length) {
+        g.innerHTML = '<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="9"/></svg><p>粘贴文字，点击「生成图片」</p><div class="hint">支持正文和篇首语两种模式分别生成</div></div>';
+        document.getElementById('countInfo').textContent = '暂无图片';
+        return;
+    }
+    document.getElementById('countInfo').textContent = '共 ' + images.length + ' 张图片';
+    g.innerHTML = '';
+    const grid = document.createElement('div'); grid.className = 'grid';
+    images.forEach((img, idx) => {
+        const card = document.createElement('div'); card.className = 'card';
+        const badge = document.createElement('div');
+        badge.className = 'badge' + (img.mode === 'opening' ? ' opening' : '');
+        badge.textContent = img.mode === 'opening' ? '篇首语' : '正文';
+        card.appendChild(badge);
+        if (img.edited) {
+            const eb = document.createElement('div'); eb.className = 'badge edited'; eb.textContent = '已编辑';
+            card.appendChild(eb);
+        }
+        const dc = document.createElement('canvas');
+        dc.width = img.canvas.width; dc.height = img.canvas.height;
+        dc.getContext('2d').drawImage(img.canvas, 0, 0);
+        dc.style.cssText = 'width:100%;height:auto;display:block;cursor:pointer';
+        dc.onclick = () => openEdit(idx);
+        card.appendChild(dc);
+        const hb = document.createElement('div'); hb.className = 'hover-bar';
+        const editBtn = document.createElement('button'); editBtn.innerHTML = '✎'; editBtn.title = '编辑';
+        editBtn.onclick = e => { e.stopPropagation(); openEdit(idx); };
+        const dlBtn = document.createElement('button'); dlBtn.innerHTML = '⬇'; dlBtn.title = '下载';
+        dlBtn.onclick = e => { e.stopPropagation(); downloadOne(idx); };
+        const rmBtn = document.createElement('button'); rmBtn.innerHTML = '✕'; rmBtn.title = '删除';
+        rmBtn.onclick = e => { e.stopPropagation(); images.splice(idx, 1); renderGallery(); };
+        hb.append(editBtn, dlBtn, rmBtn);
+        card.appendChild(hb);
+        grid.appendChild(card);
+    });
+    g.appendChild(grid);
+}
+
+// ── Edit Panel ──
+function openEdit(idx) {
+    editIdx = idx;
+    const img = images[idx];
+    if (!img.box) img.box = defaultBox(img.settings);
+    const panel = document.getElementById('editPanel');
+    const overlay = document.getElementById('editOverlay');
+    document.getElementById('editTitle').textContent = (img.mode === 'opening' ? '篇首语' : '正文') + ' · 第 ' + (idx + 1) + ' 张';
+    // Preview
+    const pv = document.getElementById('editPreview');
+    // Remove old canvas and overlay box if any
+    const oldC = pv.querySelector('canvas');
+    if (oldC) oldC.remove();
+    const oldBox = pv.querySelector('.drag-overlay-box');
+    if (oldBox) oldBox.remove();
+    const pc = document.createElement('canvas');
+    pc.width = img.canvas.width; pc.height = img.canvas.height;
+    pc.getContext('2d').drawImage(img.canvas, 0, 0);
+    pc.style.cssText = 'max-width:100%;max-height:260px;height:auto';
+    pv.insertBefore(pc, pv.firstChild);
+    // Text
+    document.getElementById('ed-text').value = img.text;
+    // Settings
+    const s = img.settings;
+    document.getElementById('ed-cw').value = s.canvasWidth || 1080; document.getElementById('ed-v-cw').textContent = (s.canvasWidth || 1080) + 'px';
+    document.getElementById('ed-font').value = s.fontFamily;
+    // Font weight
+    const edFwSel = document.getElementById('ed-fw');
+    const edWeights = FONT_WEIGHTS[s.fontFamily] || [400, 700];
+    edFwSel.innerHTML = '';
+    edWeights.forEach(w => { const o = document.createElement('option'); o.value = w; o.textContent = w; if (w === (s.fontWeight||400)) o.selected = true; edFwSel.appendChild(o); });
+    document.getElementById('ed-v-fw').textContent = s.fontWeight || 400;
+    document.getElementById('ed-size').value = s.fontSize; document.getElementById('ed-v-size').textContent = s.fontSize + 'px';
+    document.getElementById('ed-ls').value = s.letterSpacing; document.getElementById('ed-v-ls').textContent = s.letterSpacing + 'px';
+    document.getElementById('ed-lh').value = Math.round(s.lineHeight * 10); document.getElementById('ed-v-lh').textContent = s.lineHeight.toFixed(1);
+    document.getElementById('ed-sm').value = s.sideMargin || 60; document.getElementById('ed-v-sm').textContent = (s.sideMargin || 60) + 'px';
+    document.getElementById('ed-pl').value = Math.round((s.paddingLines || 2) * 10); document.getElementById('ed-v-pl').textContent = (s.paddingLines || 2).toFixed(1) + '行';
+    document.getElementById('ed-color').value = s.color; document.getElementById('ed-v-color').textContent = s.color;
+    // 背景设置同步到编辑面板
+    document.getElementById('ed-bgcolor').value = s.bgColor || '#ffffff';
+    document.getElementById('ed-v-bgcolor').textContent = s.bgColor || '#ffffff';
+    if (s.bgImage) {
+        document.getElementById('ed-bgimg-info').style.display = 'block';
+        document.getElementById('ed-bri').value = s.brightnessAdj || 0;
+        document.getElementById('ed-v-bri').textContent = s.brightnessAdj || 0;
+        document.getElementById('ed-con').value = s.contrastAdj || 0;
+        document.getElementById('ed-v-con').textContent = s.contrastAdj || 0;
+        document.getElementById('ed-bgo').value = s.bgOpacity != null ? s.bgOpacity : 100;
+        document.getElementById('ed-v-bgo').textContent = (s.bgOpacity != null ? s.bgOpacity : 100) + '%';
+        // Update edit panel filter button active states
+        ['fb-edit', 'fb2-edit'].forEach(groupId => {
+            const group = document.getElementById(groupId);
+            if (group) group.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === (s.bgFilter || 'none')));
+        });
+    } else {
+        document.getElementById('ed-bgimg-info').style.display = 'none';
+    }
+    document.getElementById('ed-wm').classList.toggle('on', s.watermark);
+    // Align buttons
+    const alignVal = img.box.align || s.textAlign || 'left';
+    document.querySelectorAll('#ed-align .align-btn').forEach(b => b.classList.toggle('active', b.dataset.align === alignVal));
+    panel.classList.add('show'); overlay.classList.add('show');
+    document.querySelectorAll('.card').forEach((c, i) => c.classList.toggle('editing', i === idx));
+    // Setup draggable overlay
+    setTimeout(() => setupDragOverlay(), 50);
+}
+
+function closeEdit() {
+    editIdx = -1;
+    document.getElementById('editPanel').classList.remove('show');
+    document.getElementById('editOverlay').classList.remove('show');
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('editing'));
+    hideGuides();
+}
+
+function editChange(key, val) {
+    if (editIdx < 0) return;
+    const img = images[editIdx];
+    img.settings[key] = val;
+    img.edited = true;
+    if (key === 'canvasWidth') document.getElementById('ed-v-cw').textContent = val + 'px';
+    if (key === 'fontSize') document.getElementById('ed-v-size').textContent = val + 'px';
+    if (key === 'letterSpacing') document.getElementById('ed-v-ls').textContent = val + 'px';
+    if (key === 'lineHeight') document.getElementById('ed-v-lh').textContent = val.toFixed(1);
+    if (key === 'sideMargin') document.getElementById('ed-v-sm').textContent = val + 'px';
+    if (key === 'paddingLines') document.getElementById('ed-v-pl').textContent = val.toFixed(1) + '行';
+    if (key === 'color') document.getElementById('ed-v-color').textContent = val;
+    if (key === 'bgColor') { document.getElementById('ed-v-bgcolor').textContent = val; }
+    // Re-render
+    img.canvas = doRender(img.text, img.settings, img.box);
+    updateEditPreview();
+    updateCardInGallery(editIdx);
+}
+
+function onEditFontChange(fontFamily) {
+    if (editIdx < 0) return;
+    const img = images[editIdx];
+    img.settings.fontFamily = fontFamily;
+    img.edited = true;
+    // Update font weight dropdown
+    const edFwSel = document.getElementById('ed-fw');
+    const weights = FONT_WEIGHTS[fontFamily] || [400, 700];
+    const curFw = img.settings.fontWeight || 400;
+    edFwSel.innerHTML = '';
+    let closestW = weights[0];
+    weights.forEach(w => {
+        const o = document.createElement('option'); o.value = w; o.textContent = w; edFwSel.appendChild(o);
+        if (Math.abs(w - curFw) < Math.abs(closestW - curFw)) closestW = w;
+    });
+    if (!weights.includes(curFw)) { edFwSel.value = closestW; img.settings.fontWeight = closestW; }
+    else { edFwSel.value = curFw; }
+    document.getElementById('ed-v-fw').textContent = img.settings.fontWeight;
+    img.canvas = doRender(img.text, img.settings, img.box);
+    updateEditPreview();
+    updateCardInGallery(editIdx);
+}
+
+function editSetAlign(align) {
+    if (editIdx < 0) return;
+    const img = images[editIdx];
+    if (!img.box) img.box = defaultBox(img.settings);
+    img.box.align = align;
+    img.settings.textAlign = align;
+    img.edited = true;
+    document.querySelectorAll('#ed-align .align-btn').forEach(b => b.classList.toggle('active', b.dataset.align === align));
+    img.canvas = doRender(img.text, img.settings, img.box);
+    updateEditPreview();
+    updateCardInGallery(editIdx);
+}
+
+function editTextChange(newText) {
+    if (editIdx < 0) return;
+    const img = images[editIdx];
+    img.text = newText;
+    img.edited = true;
+    img.canvas = doRender(newText, img.settings, img.box);
+    updateEditPreview();
+    updateCardInGallery(editIdx);
+    syncTextToMain(img);
+}
+
+function syncTextToMain(img) {
+    const sameMode = images.filter(i => i.mode === img.mode);
+    const texts = sameMode.map(i => i.text);
+    document.getElementById('input-' + img.mode).value = texts.join('\n\n');
+}
+
+function editToggleWM() {
+    if (editIdx < 0) return;
+    const img = images[editIdx];
+    img.settings.watermark = !img.settings.watermark;
+    img.edited = true;
+    document.getElementById('ed-wm').classList.toggle('on', img.settings.watermark);
+    img.canvas = doRender(img.text, img.settings, img.box);
+    updateEditPreview();
+    updateCardInGallery(editIdx);
+}
+
+function editReset() {
+    if (editIdx < 0) return;
+    const img = images[editIdx];
+    img.settings = {...S[img.mode]};
+    img.box = defaultBox(img.settings);
+    img.edited = false;
+    img.canvas = doRender(img.text, img.settings, img.box);
+    openEdit(editIdx);
+    updateCardInGallery(editIdx);
+}
+
+function updateEditPreview() {
+    if (editIdx < 0) return;
+    const img = images[editIdx];
+    const pv = document.getElementById('editPreview');
+    const pc = pv.querySelector('canvas');
+    if (pc) {
+        pc.width = img.canvas.width; pc.height = img.canvas.height;
+        pc.getContext('2d').clearRect(0, 0, pc.width, pc.height);
+        pc.getContext('2d').drawImage(img.canvas, 0, 0);
+    }
+    updateDragOverlay();
+}
+
+function updateCardInGallery(idx) {
+    const cards = document.querySelectorAll('.card');
+    const card = cards[idx];
+    if (!card) return;
+    const img = images[idx];
+    const dc = card.querySelector('canvas');
+    if (dc) {
+        dc.width = img.canvas.width; dc.height = img.canvas.height;
+        dc.getContext('2d').clearRect(0, 0, dc.width, dc.height);
+        dc.getContext('2d').drawImage(img.canvas, 0, 0);
+    }
+    const oldBadge = card.querySelector('.badge.edited');
+    if (img.edited && !oldBadge) {
+        const b = document.createElement('div'); b.className = 'badge edited'; b.textContent = '已编辑';
+        card.insertBefore(b, card.querySelector('.hover-bar'));
+    } else if (!img.edited && oldBadge) { oldBadge.remove(); }
+}
+
+function editMove(dir) {
+    if (editIdx < 0) return;
+    const newIdx = editIdx + dir;
+    if (newIdx < 0 || newIdx >= images.length) return;
+    [images[editIdx], images[newIdx]] = [images[newIdx], images[editIdx]];
+    editIdx = newIdx;
+    renderGallery();
+    openEdit(editIdx);
+}
+
+function editDownload() { if (editIdx >= 0) downloadOne(editIdx); }
+function editDelete() {
+    if (editIdx < 0) return;
+    images.splice(editIdx, 1);
+    closeEdit();
+    renderGallery();
+}
+
+// ── Draggable Overlay (PPT-style 8 handles) ──
+let dragState = null; // { type: 'move'|'tl'|'tr'|'bl'|'br'|'tm'|'bm'|'ml'|'mr', startX, startY, origBox, scale }
+
+function setupDragOverlay() {
+    if (editIdx < 0) return;
+    const pv = document.getElementById('editPreview');
+    const canvas = pv.querySelector('canvas');
+    if (!canvas) return;
+    const img = images[editIdx];
+    if (!img.box) img.box = defaultBox(img.settings);
+
+    // Remove old overlay box
+    const old = pv.querySelector('.drag-overlay-box');
+    if (old) old.remove();
+
+    const overlayBox = document.createElement('div');
+    overlayBox.className = 'drag-overlay-box';
+    overlayBox.innerHTML = '<div class="drag-label">拖动调整位置</div>' +
+        '<div class="box-handle tl"></div>' +
+        '<div class="box-handle tr"></div>' +
+        '<div class="box-handle bl"></div>' +
+        '<div class="box-handle br"></div>' +
+        '<div class="box-handle tm"></div>' +
+        '<div class="box-handle bm"></div>' +
+        '<div class="box-handle ml"></div>' +
+        '<div class="box-handle mr"></div>';
+    pv.appendChild(overlayBox);
+
+    updateDragOverlay();
+
+    // Event: move (drag the box body)
+    overlayBox.addEventListener('mousedown', e => {
+        if (e.target.classList.contains('box-handle')) return;
+        e.preventDefault();
+        startDrag(e, 'move');
+    });
+    overlayBox.addEventListener('touchstart', e => {
+        if (e.target.classList.contains('box-handle')) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        startDrag(touch, 'move');
+    }, { passive: false });
+
+    // Events: 8 handles
+    const handleTypes = ['tl','tr','bl','br','tm','bm','ml','mr'];
+    handleTypes.forEach(ht => {
+        const h = overlayBox.querySelector('.box-handle.' + ht);
+        if (h) {
+            h.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); startDrag(e, ht); });
+            h.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); const touch = e.touches[0]; startDrag(touch, ht); }, { passive: false });
+        }
+    });
+}
+
+function getCanvasScale() {
+    const pv = document.getElementById('editPreview');
+    const canvas = pv.querySelector('canvas');
+    if (!canvas) return { scale: 1, offX: 0, offY: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const pvRect = pv.getBoundingClientRect();
+    const scale = rect.width / canvas.width;
+    const offX = rect.left - pvRect.left;
+    const offY = rect.top - pvRect.top;
+    return { scale, offX, offY, canvasW: canvas.width, canvasH: canvas.height };
+}
+
+function updateDragOverlay() {
+    if (editIdx < 0) return;
+    const pv = document.getElementById('editPreview');
+    const overlayBox = pv.querySelector('.drag-overlay-box');
+    if (!overlayBox) return;
+    const img = images[editIdx];
+    if (!img.box) return;
+    const { scale, offX, offY } = getCanvasScale();
+    overlayBox.style.left = (offX + img.box.x * scale) + 'px';
+    overlayBox.style.top = (offY + img.box.y * scale) + 'px';
+    overlayBox.style.width = (img.box.width * scale) + 'px';
+    const canvas = pv.querySelector('canvas');
+    if (canvas) overlayBox.style.height = (canvas.getBoundingClientRect().height) + 'px';
+}
+
+function startDrag(e, type) {
+    if (editIdx < 0) return;
+    const img = images[editIdx];
+    const { scale } = getCanvasScale();
+    dragState = {
+        type,
+        startX: e.clientX || e.pageX,
+        startY: e.clientY || e.pageY,
+        scale: scale,
+        origBox: { ...img.box }
+    };
+    document.addEventListener('mousemove', onDrag);
+    document.addEventListener('mouseup', endDrag);
+    document.addEventListener('touchmove', onDrag, { passive: false });
+    document.addEventListener('touchend', endDrag);
+}
+
+function onDrag(e) {
+    if (!dragState || editIdx < 0) return;
+    if (e.touches) e.preventDefault();
+    const moveEvt = e.touches ? e.touches[0] : e;
+    const img = images[editIdx];
+    const dx = (moveEvt.clientX - dragState.startX) / dragState.scale;
+    const dy = (moveEvt.clientY - dragState.startY) / dragState.scale;
+    const CW = img.settings.canvasWidth || 1080;
+    const orig = dragState.origBox;
+    const MIN_W = 50;
+    const t = dragState.type;
+
+    if (t === 'move') {
+        img.box.x = Math.max(0, Math.min(CW - img.box.width, orig.x + dx));
+        img.box.y = Math.max(0, orig.y + dy);
+    } else if (t === 'ml') {
+        // Left edge: adjust x and width
+        const newX = Math.max(0, Math.min(orig.x + orig.width - MIN_W, orig.x + dx));
+        img.box.width = orig.width + (orig.x - newX);
+        img.box.x = newX;
+    } else if (t === 'mr') {
+        // Right edge: adjust width only
+        const maxW = CW - img.box.x;
+        img.box.width = Math.max(MIN_W, Math.min(maxW, orig.width + dx));
+    } else if (t === 'tm') {
+        // Top middle: adjust y only
+        img.box.y = Math.max(0, orig.y + dy);
+    } else if (t === 'bm') {
+        // Bottom middle: adjust y (same direction as top for offset)
+        img.box.y = Math.max(0, orig.y + dy);
+    } else if (t === 'tl') {
+        // Top-left: adjust x/width and y
+        const newX = Math.max(0, Math.min(orig.x + orig.width - MIN_W, orig.x + dx));
+        img.box.width = orig.width + (orig.x - newX);
+        img.box.x = newX;
+        img.box.y = Math.max(0, orig.y + dy);
+    } else if (t === 'tr') {
+        // Top-right: adjust width and y
+        const maxW = CW - img.box.x;
+        img.box.width = Math.max(MIN_W, Math.min(maxW, orig.width + dx));
+        img.box.y = Math.max(0, orig.y + dy);
+    } else if (t === 'bl') {
+        // Bottom-left: adjust x/width and y
+        const newX = Math.max(0, Math.min(orig.x + orig.width - MIN_W, orig.x + dx));
+        img.box.width = orig.width + (orig.x - newX);
+        img.box.x = newX;
+        img.box.y = Math.max(0, orig.y + dy);
+    } else if (t === 'br') {
+        // Bottom-right: adjust width and y
+        const maxW = CW - img.box.x;
+        img.box.width = Math.max(MIN_W, Math.min(maxW, orig.width + dx));
+        img.box.y = Math.max(0, orig.y + dy);
+    }
+
+    img.edited = true;
+    img.canvas = doRender(img.text, img.settings, img.box);
+    updateEditPreview();
+    updateCardInGallery(editIdx);
+    // Show guides
+    showGuides(img);
+}
+
+function endDrag() {
+    dragState = null;
+    document.removeEventListener('mousemove', onDrag);
+    document.removeEventListener('mouseup', endDrag);
+    document.removeEventListener('touchmove', onDrag);
+    document.removeEventListener('touchend', endDrag);
+    hideGuides();
+}
+
+function showGuides(img) {
+    const pv = document.getElementById('editPreview');
+    const { scale, offX, offY } = getCanvasScale();
+    const CW = img.settings.canvasWidth || 1080;
+    const sm = img.settings.sideMargin || 60;
+    const threshold = 12 / scale; // in canvas coords
+
+    // Canvas center
+    const boxCenter = img.box.x + img.box.width / 2;
+    const canvasCenter = CW / 2;
+    const gc = document.getElementById('guideCenter');
+    if (Math.abs(boxCenter - canvasCenter) < threshold) {
+        gc.style.display = 'block';
+        gc.style.left = (offX + canvasCenter * scale) + 'px';
+    } else { gc.style.display = 'none'; }
+
+    // Left margin
+    const gl = document.getElementById('guideLeft');
+    if (Math.abs(img.box.x - sm) < threshold) {
+        gl.style.display = 'block';
+        gl.style.left = (offX + sm * scale) + 'px';
+    } else { gl.style.display = 'none'; }
+
+    // Right margin
+    const rightEdge = img.box.x + img.box.width;
+    const rightMargin = CW - sm;
+    const gr = document.getElementById('guideRight');
+    if (Math.abs(rightEdge - rightMargin) < threshold) {
+        gr.style.display = 'block';
+        gr.style.left = (offX + rightMargin * scale) + 'px';
+    } else { gr.style.display = 'none'; }
+
+    // Top alignment
+    const gt = document.getElementById('guideTop');
+    if (img.box.y > 0 && Math.abs(img.box.y) < threshold * 2) {
+        gt.style.display = 'block';
+        gt.style.top = (offY) + 'px';
+    } else { gt.style.display = 'none'; }
+}
+
+function hideGuides() {
+    ['guideCenter','guideLeft','guideRight','guideTop'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+}
+
+// ── Download ──
+function downloadOne(idx) {
+    return new Promise(function(resolve) {
+        images[idx].canvas.toBlob(function(blob) {
+            if (!blob) { resolve(); return; }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.download = '鞋带二三_' + (idx + 1) + '.png';
+            a.href = url;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                resolve();
+            }, 500);
+        }, 'image/png');
+    });
+}
+
+// ── Download Select Modal ──
+let dlSelected = new Set();
+
+function openDlModal() {
+    if (!images.length) { alert('暂无图片'); return; }
+    dlSelected = new Set(images.map((_, i) => i));
+    const grid = document.getElementById('dlGrid');
+    grid.innerHTML = '';
+    images.forEach((img, i) => {
+        const item = document.createElement('div');
+        item.className = 'dl-item selected';
+        item.dataset.idx = i;
+        const check = document.createElement('div');
+        check.className = 'dl-check';
+        check.textContent = '✓';
+        const thumb = document.createElement('img');
+        // Use a smaller thumbnail canvas for performance
+        const thumbCanvas = document.createElement('canvas');
+        const maxThumbW = 240;
+        const ratio = Math.min(1, maxThumbW / img.canvas.width);
+        thumbCanvas.width = Math.round(img.canvas.width * ratio);
+        thumbCanvas.height = Math.round(img.canvas.height * ratio);
+        thumbCanvas.getContext('2d').drawImage(img.canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+        thumb.src = thumbCanvas.toDataURL('image/png');
+        const label = document.createElement('div');
+        label.className = 'dl-label';
+        label.textContent = '#' + (i + 1) + ' ' + (img.mode === 'opening' ? '篇首语' : '正文');
+        item.append(check, thumb, label);
+        item.onclick = () => toggleDlItem(i, item);
+        grid.appendChild(item);
+    });
+    updateDlCount();
+    document.getElementById('dlSelectAll').checked = true;
+    document.getElementById('dlOverlay').classList.add('show');
+}
+
+function closeDlModal() {
+    document.getElementById('dlOverlay').classList.remove('show');
+}
+
+function toggleDlItem(idx, item) {
+    if (dlSelected.has(idx)) {
+        dlSelected.delete(idx);
+        item.classList.remove('selected');
+    } else {
+        dlSelected.add(idx);
+        item.classList.add('selected');
+    }
+    document.getElementById('dlSelectAll').checked = dlSelected.size === images.length;
+    updateDlCount();
+}
+
+function toggleDlSelectAll(checked) {
+    dlSelected.clear();
+    if (checked) images.forEach((_, i) => dlSelected.add(i));
+    document.querySelectorAll('.dl-item').forEach((item, i) => {
+        item.classList.toggle('selected', dlSelected.has(i));
+    });
+    updateDlCount();
+}
+
+function updateDlCount() {
+    document.getElementById('dlCount').textContent = '已选 ' + dlSelected.size + ' 张';
+}
+
+async function confirmDownload() {
+    if (!dlSelected.size) { alert('请至少选择一张图片'); return; }
+    closeDlModal();
+    const indices = [...dlSelected].sort((a, b) => a - b);
+    
+    if (indices.length === 1) {
+        await downloadOne(indices[0]);
+        return;
+    }
+    
+    // 多张用 JSZip 打包
+    try {
+        if (typeof JSZip === 'undefined') throw new Error('JSZip not available');
+        const zip = new JSZip();
+        for (const idx of indices) {
+            const blob = await new Promise(function(resolve) {
+                images[idx].canvas.toBlob(resolve, 'image/png');
+            });
+            if (blob) {
+                zip.file('鞋带二三_' + (idx + 1) + '.png', blob);
+            }
+        }
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.download = '鞋带二三_图片_' + new Date().toISOString().slice(0,10) + '.zip';
+        a.href = url;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 1000);
+    } catch (err) {
+        // JSZip 不可用时，降级为逐张下载
+        for (const idx of indices) {
+            await downloadOne(idx);
+            await new Promise(function(r) { setTimeout(r, 800); });
+        }
+    }
+}
+
+// ── Preview ──
+function previewAll() {
+    if (!images.length) { alert('暂无图片'); return; }
+    const body = document.getElementById('previewBody'); body.innerHTML = '';
+    images.forEach(img => {
+        const im = document.createElement('img');
+        im.src = img.canvas.toDataURL('image/png');
+        body.appendChild(im);
+    });
+    document.getElementById('previewModal').classList.add('show');
+}
+
+// ── Save Article ──
+function openSaveModal() {
+    const bt = document.getElementById('input-body').value.trim();
+    const ot = document.getElementById('input-opening').value.trim();
+    if (!bt && !ot) { alert('请先输入文章内容'); return; }
+    if (!currentArticleId) document.getElementById('saveTitle').value = '';
+    document.getElementById('saveOverlay').classList.add('show');
+    setTimeout(() => document.getElementById('saveTitle').focus(), 100);
+}
+function closeSaveModal() { document.getElementById('saveOverlay').classList.remove('show'); }
+
+function doSaveArticle() {
+    const title = document.getElementById('saveTitle').value.trim() || '无标题';
+    const articles = getArticles();
+    if (currentArticleId) {
+        const idx = articles.findIndex(a => a.id === currentArticleId);
+        if (idx >= 0) {
+            articles[idx].title = title;
+            articles[idx].date = new Date().toLocaleString('zh-CN') + ' (已更新)';
+            articles[idx].body = document.getElementById('input-body').value.trim();
+            articles[idx].opening = document.getElementById('input-opening').value.trim();
+            articles[idx].sBody = {...S.body};
+            articles[idx].sOpening = {...S.opening};
+            localStorage.setItem('xd23_articles', JSON.stringify(articles));
+            closeSaveModal();
+            alert('已更新「' + title + '」');
+            return;
+        } else {
+            // currentArticleId存在但找不到对应文章，清除并作为新文章保存
+            setCurrentArticleId(null);
+        }
+    }
+    const newId = Date.now();
+    articles.unshift({
+        id: newId, title,
+        date: new Date().toLocaleString('zh-CN'),
+        body: document.getElementById('input-body').value.trim(),
+        opening: document.getElementById('input-opening').value.trim(),
+        sBody: {...S.body}, sOpening: {...S.opening},
+        colorIdx: articles.length % NOTE_COLORS.length
+    });
+    setCurrentArticleId(newId);
+    if (articles.length > 50) articles.pop();
+    localStorage.setItem('xd23_articles', JSON.stringify(articles));
+    closeSaveModal();
+    alert('已保存「' + title + '」');
+}
+
+function getArticles() { return JSON.parse(localStorage.getItem('xd23_articles') || '[]'); }
+
+// ── Library Modal ──
+function openLibModal() {
+    const articles = getArticles();
+    const body = document.getElementById('libBody');
+    if (!articles.length) {
+        body.innerHTML = '<div class="lib-empty">文章库为空<br><span style="font-size:12px;color:#ddd">保存的文章会显示在这里</span></div>';
+    } else {
+        const grid = document.createElement('div'); grid.className = 'lib-grid';
+        articles.forEach((a, i) => {
+            const note = document.createElement('div'); note.className = 'note';
+            const tab = document.createElement('div'); tab.className = 'note-tab';
+            tab.style.background = NOTE_COLORS[(a.colorIdx || 0) % NOTE_COLORS.length];
+            tab.textContent = a.title || '无标题';
+            note.appendChild(tab);
+            const nb = document.createElement('div'); nb.className = 'note-body';
+            const preview = (a.body || a.opening || '').substring(0, 60).replace(/\n/g, ' ');
+            nb.textContent = preview + (preview.length >= 60 ? '…' : '');
+            note.appendChild(nb);
+            const dt = document.createElement('div'); dt.className = 'note-date';
+            dt.textContent = a.date;
+            note.appendChild(dt);
+            const del = document.createElement('button'); del.className = 'note-del'; del.textContent = '✕';
+            del.onclick = e => {
+                e.stopPropagation();
+                if (confirm('删除「' + (a.title || '无标题') + '」？')) {
+                    const arts = getArticles(); arts.splice(i, 1);
+                    localStorage.setItem('xd23_articles', JSON.stringify(arts));
+                    openLibModal();
+                }
+            };
+            note.appendChild(del);
+            note.onclick = () => { loadArticle(a); closeLibModal(); };
+            grid.appendChild(note);
+        });
+        body.innerHTML = '';
+        body.appendChild(grid);
+    }
+    document.getElementById('libOverlay').classList.add('show');
+}
+function closeLibModal() { document.getElementById('libOverlay').classList.remove('show'); }
+
+function loadArticle(a) {
+    setCurrentArticleId(a.id);
+    document.getElementById('input-body').value = a.body || '';
+    document.getElementById('input-opening').value = a.opening || '';
+    if (a.sBody) Object.assign(S.body, a.sBody);
+    if (a.sOpening) Object.assign(S.opening, a.sOpening);
+    syncUI();
+    document.getElementById('saveTitle').value = a.title || '';
+    alert('已加载「' + (a.title || '无标题') + '」\n点击「生成图片」开始排版\n再次保存会更新到同一篇');
+}
+
+function syncUI() {
+    ['body', 'opening'].forEach(m => {
+        const s = S[m];
+        const fs = document.getElementById('font-' + m);
+        for (const o of fs.options) if (o.value === s.fontFamily) { o.selected = true; break; }
+        populateFontWeights(m, s.fontFamily, s.fontWeight || 400);
+        const set = (id, val, did, fmt) => { const el = document.getElementById(id); if (el) el.value = val; const d = document.getElementById(did); if (d) d.textContent = fmt(val); };
+        set('cw-' + m, s.canvasWidth || 1080, 'v-cw-' + m, v => v + 'px');
+        set('size-' + m, s.fontSize, 'v-font-' + m, v => v + 'px');
+        set('ls-' + m, s.letterSpacing, 'v-ls-' + m, v => v + 'px');
+        set('lh-' + m, Math.round(s.lineHeight * 10), 'v-lh-' + m, v => (v / 10).toFixed(1));
+        set('sm-' + m, s.sideMargin || 60, 'v-sm-' + m, v => v + 'px');
+        set('pl-' + m, Math.round((s.paddingLines || 2) * 10), 'v-pl-' + m, v => (v / 10).toFixed(1) + '行');
+        document.getElementById('color-' + m).value = s.color;
+        document.getElementById('v-color-' + m).textContent = s.color;
+        // 背景设置同步
+        if (document.getElementById('bgcolor-' + m)) {
+            document.getElementById('bgcolor-' + m).value = s.bgColor || '#ffffff';
+            document.getElementById('v-bgcolor-' + m).textContent = s.bgColor || '#ffffff';
+        }
+        if (s.bgImage) {
+            document.getElementById('bgimg-info-' + m).style.display = 'block';
+            if (document.getElementById('bri-' + m)) document.getElementById('bri-' + m).value = s.brightnessAdj || 0;
+            if (document.getElementById('v-bri-' + m)) document.getElementById('v-bri-' + m).textContent = s.brightnessAdj || 0;
+            if (document.getElementById('con-' + m)) document.getElementById('con-' + m).value = s.contrastAdj || 0;
+            if (document.getElementById('v-con-' + m)) document.getElementById('v-con-' + m).textContent = s.contrastAdj || 0;
+            if (document.getElementById('bgo-' + m)) document.getElementById('bgo-' + m).value = s.bgOpacity != null ? s.bgOpacity : 100;
+            if (document.getElementById('v-bgo-' + m)) document.getElementById('v-bgo-' + m).textContent = (s.bgOpacity != null ? s.bgOpacity : 100) + '%';
+            // Update filter button active states
+            ['fb-' + m, 'fb2-' + m].forEach(groupId => {
+                const group = document.getElementById(groupId);
+                if (group) group.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === (s.bgFilter || 'none')));
+            });
+        } else {
+            document.getElementById('bgimg-info-' + m).style.display = 'none';
+        }
+        document.getElementById('wm-' + m).classList.toggle('on', s.watermark);
+        // Align buttons
+        const alignVal = s.textAlign || 'left';
+        document.querySelectorAll('#align-' + m + ' .align-btn').forEach(b => b.classList.toggle('active', b.dataset.align === alignVal));
+    });
+}
+
+// ── Presets ──
+function getPresetSettings(mode) {
+    const s = S[mode];
+    return {
+        canvasWidth: s.canvasWidth,
+        fontFamily: s.fontFamily,
+        fontSize: s.fontSize,
+        fontWeight: s.fontWeight || 400,
+        letterSpacing: s.letterSpacing,
+        lineHeight: s.lineHeight,
+        color: s.color,
+        watermark: s.watermark,
+        sideMargin: s.sideMargin || 60,
+        textAlign: s.textAlign || 'left',
+        paddingLines: s.paddingLines || 2,
+        bgColor: s.bgColor || '#ffffff',
+        bgFilter: s.bgFilter || 'none',
+        brightnessAdj: s.brightnessAdj || 0,
+        contrastAdj: s.contrastAdj || 0,
+        bgOpacity: s.bgOpacity != null ? s.bgOpacity : 100
+        // bgImage 不存入预设（base64太大）
+    };
+}
+
+function savePreset() {
+    // Determine current active mode
+    const activeTab = document.querySelector('.tab.active');
+    const mode = activeTab ? activeTab.dataset.mode : 'body';
+    const name = prompt('为预设命名：');
+    if (!name || !name.trim()) return;
+    const presets = JSON.parse(localStorage.getItem('xd23_presets') || '[]');
+    presets.push({
+        id: Date.now(),
+        name: name.trim(),
+        mode: mode,
+        settings: getPresetSettings(mode)
+    });
+    localStorage.setItem('xd23_presets', JSON.stringify(presets));
+    renderPresetList();
+}
+
+function applyPreset(presetId) {
+    const presets = JSON.parse(localStorage.getItem('xd23_presets') || '[]');
+    const preset = presets.find(p => p.id === presetId);
+    if (!preset) return;
+    const mode = preset.mode;
+    Object.assign(S[mode], preset.settings);
+    syncUI();
+    autoRender();
+}
+
+function deletePreset(presetId, e) {
+    e.stopPropagation();
+    let presets = JSON.parse(localStorage.getItem('xd23_presets') || '[]');
+    presets = presets.filter(p => p.id !== presetId);
+    localStorage.setItem('xd23_presets', JSON.stringify(presets));
+    renderPresetList();
+}
+
+function renderPresetList() {
+    const container = document.getElementById('presetList');
+    const presets = JSON.parse(localStorage.getItem('xd23_presets') || '[]');
+    container.innerHTML = '';
+    if (!presets.length) {
+        container.innerHTML = '<span style="font-size:11px;color:#ccc">暂无预设</span>';
+        return;
+    }
+    presets.forEach(p => {
+        const tag = document.createElement('span');
+        tag.className = 'preset-tag';
+        tag.title = p.mode === 'opening' ? '篇首语模式' : '正文模式';
+        tag.innerHTML = '<span>' + p.name + '</span><button class="preset-del" onclick="deletePreset(' + p.id + ', event)">✕</button>';
+        tag.onclick = () => applyPreset(p.id);
+        container.appendChild(tag);
+    });
+}
+
+// ── Data Export / Import ──
+function exportData() {
+    const data = {
+        articles: getArticles(),
+        settings: { body: {...S.body}, opening: {...S.opening} },
+        exportDate: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.download = '鞋带二三_备份_' + new Date().toISOString().slice(0, 10) + '.json';
+    a.href = URL.createObjectURL(blob); a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+function importData(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        try {
+            const data = JSON.parse(ev.target.result);
+            if (data.articles) localStorage.setItem('xd23_articles', JSON.stringify(data.articles));
+            if (data.settings) {
+                if (data.settings.body) Object.assign(S.body, data.settings.body);
+                if (data.settings.opening) Object.assign(S.opening, data.settings.opening);
+                syncUI();
+            }
+            alert('导入成功！' + (data.articles ? ' 恢复了 ' + data.articles.length + ' 篇文章' : ''));
+        } catch (err) { alert('导入失败：文件格式不正确'); }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+}
+
+// ── Keyboard ──
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        document.getElementById('previewModal').classList.remove('show');
+        closeEdit();
+        closeLibModal();
+        closeSaveModal();
+        closeDlModal();
+    }
+});
+</script>
+</body>
+</html>
