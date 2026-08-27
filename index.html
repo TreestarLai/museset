@@ -239,7 +239,7 @@
     <div class="left">
         <div class="header">
             <h1 style="font-weight:300;letter-spacing:2px;">MuseSet</h1>
-            <div class="sub" style="letter-spacing:1px;margin-top:4px;">排云 · 公众号排版工具 <span id="verTag" style="color:#e8a33d;font-weight:600;">v3.5.3-debug</span></div>
+            <div class="sub" style="letter-spacing:1px;margin-top:4px;">排云 · 公众号排版工具 <span id="verTag" style="color:#e8a33d;font-weight:600;">v3.5.4-debug</span></div>
         </div>
         <div class="tabs">
             <div class="tab active" data-mode="body" onclick="switchMode('body')">正文模式</div>
@@ -603,6 +603,22 @@
 /* ═══════════════════════════════════════════
    MuseSet排云 · 公众号排版工具 v3.5
    ═══════════════════════════════════════════ */
+
+// ── v3.5.4 全局错误捕获，诊断下载问题 ──
+window.__dlErrors = [];
+window.addEventListener('error', function(ev) {
+    try {
+        window.__dlErrors.push('[window.error] ' + (ev.message || '') + ' @ ' + (ev.filename || '') + ':' + (ev.lineno || '') + ':' + (ev.colno || '') + (ev.error && ev.error.stack ? '\n' + ev.error.stack : ''));
+        if (window.__dlErrors.length > 20) window.__dlErrors.shift();
+    } catch(_) {}
+});
+window.addEventListener('unhandledrejection', function(ev) {
+    try {
+        var reason = ev.reason;
+        window.__dlErrors.push('[unhandledrejection] ' + (reason && reason.message ? reason.message : String(reason)) + (reason && reason.stack ? '\n' + reason.stack : ''));
+        if (window.__dlErrors.length > 20) window.__dlErrors.shift();
+    } catch(_) {}
+});
 
 // ── Password Gate ──
 const ACCESS_PWD = 'Treestar202601';
@@ -1770,17 +1786,50 @@ async function confirmDownload() {
     hideDlToast();
 
     if (!okCount) {
-        var debugInfo = firstError || '(firstError is empty string - this is itself a bug)';
-        // 额外附加：第一张图的完整诊断
-        try {
-            if (indices.length > 0 && images[indices[0]] && images[indices[0]].canvas) {
-                var probe = exportCanvasBlob(images[indices[0]].canvas);
-                debugInfo += '\n\n[Probe on first canvas]\n' + (probe.debug || probe.error || 'no debug');
-            }
-        } catch(probeErr) {
-            debugInfo += '\n\n[Probe threw] ' + (probeErr && probeErr.message ? probeErr.message : probeErr);
+        // v3.5.4: 收集所有错误，不再只取 firstError
+        var allErrors = [];
+        for (var ei = 0; ei < failed.length; ei++) {
+            allErrors.push('#' + failed[ei]);
         }
-        alert('所有图片转换失败（v3.5.3诊断版）：\n\n' + debugInfo + '\n\n请截图发给我。');
+        // 无条件跑 probe，不依赖任何 if
+        var probeText = 'probe skipped';
+        try {
+            var pIdx = indices[0];
+            var pImg = images[pIdx];
+            if (pImg) {
+                var pCanvas = pImg.canvas;
+                if (pCanvas) {
+                    probeText = 'canvas exists: ' + pCanvas.width + 'x' + pCanvas.height + '\n';
+                    try {
+                        var pResult = exportCanvasBlob(pCanvas);
+                        probeText += 'exportCanvasBlob returned:\n' + JSON.stringify({hasBlob: !!pResult.blob, blobSize: pResult.blob ? pResult.blob.size : 0, errorLen: pResult.error ? pResult.error.length : 0}) + '\n';
+                        probeText += 'DEBUG LOG:\n' + (pResult.debug || '(no debug)');
+                    } catch(pe) {
+                        probeText += 'exportCanvasBlob THREW: ' + (pe && pe.message ? pe.message : pe) + ' name=' + (pe && pe.name) + ' stack=' + (pe && pe.stack ? String(pe.stack).substring(0,500) : '');
+                    }
+                } else {
+                    probeText = 'img exists but canvas is ' + pCanvas + ' (typeof=' + typeof pCanvas + ')';
+                }
+            } else {
+                probeText = 'images[' + pIdx + '] is ' + pImg;
+            }
+        } catch(outerProbeErr) {
+            probeText = 'probe itself threw: ' + (outerProbeErr && outerProbeErr.message ? outerProbeErr.message : outerProbeErr);
+        }
+
+        // 用自定义 modal 显示，避免 alert 截断
+        var debugModal = document.getElementById('debugModal');
+        if (!debugModal) {
+            debugModal = document.createElement('div');
+            debugModal.id = 'debugModal';
+            debugModal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+            debugModal.innerHTML = '<div style="background:#1a1a1a;color:#0f0;border-radius:12px;max-width:90%;max-height:85%;overflow:auto;padding:20px;font-family:monospace;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-all;"><div id="debugContent"></div><button onclick="document.getElementById(\'debugModal\').style.display=\'none\'" style="margin-top:16px;padding:10px 30px;background:#e8a33d;color:#000;border:none;border-radius:8px;font-size:15px;font-weight:600;">关闭</button></div>';
+            document.body.appendChild(debugModal);
+        }
+        var dc = document.getElementById('debugContent');
+        var globalErrs = (window.__dlErrors && window.__dlErrors.length) ? window.__dlErrors.join('\n---\n') : '(none)';
+        dc.textContent = '=== v3.5.4 诊断报告 ===\n失败序号: ' + allErrors.join(', ') + '\nfirstError: [' + firstError + ']\n\n[全局错误日志]\n' + globalErrs + '\n\n[Probe]\n' + probeText;
+        debugModal.style.display = 'flex';
         return;
     }
 
