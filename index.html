@@ -239,7 +239,7 @@
     <div class="left">
         <div class="header">
             <h1 style="font-weight:300;letter-spacing:2px;">MuseSet</h1>
-            <div class="sub" style="letter-spacing:1px;margin-top:4px;">排云 · 公众号排版工具</div>
+            <div class="sub" style="letter-spacing:1px;margin-top:4px;">排云 · 公众号排版工具 <span id="verTag" style="color:#e8a33d;font-weight:600;">v3.5.1诊断版</span></div>
         </div>
         <div class="tabs">
             <div class="tab active" data-mode="body" onclick="switchMode('body')">正文模式</div>
@@ -1523,42 +1523,76 @@ function hideGuides() {
 // ── Download ──
 // dataURL 转 blob（用 atob，兼容手机浏览器，不依赖 fetch data:）
 function dataURLtoBlob(dataURL) {
-    try {
-        var arr = dataURL.split(',');
-        var mime = arr[0].match(/:(.*?);/)[1];
-        var bstr = atob(arr[1]);
-        var n = bstr.length;
-        var u8arr = new Uint8Array(n);
-        while (n--) u8arr[n] = bstr.charCodeAt(n);
-        return new Blob([u8arr], { type: mime });
-    } catch (e) { return null; }
+    var arr = dataURL.split(',');
+    var mime = arr[0].match(/:(.*?);/)[1];
+    var bstr = atob(arr[1]);
+    var n = bstr.length;
+    var u8arr = new Uint8Array(n);
+    while (n--) u8arr[n] = bstr.charCodeAt(n);
+    return new Blob([u8arr], { type: mime });
 }
 
-// 把 canvas 稳定地转成 blob：优先 toBlob，失败则用 toDataURL + atob 兜底
-function canvasToBlobRobust(canvas) {
-    return new Promise(function(resolve) {
-        if (!canvas || !canvas.width || !canvas.height) { resolve(null); return; }
-        var done = false;
-        var timer = null;
-        function fallback() {
-            if (done) return; done = true;
-            if (timer) clearTimeout(timer);
+// 把 canvas 转成 blob，带诊断信息。返回 {blob, error, width, height}
+function canvasToBlobDiag(canvas) {
+    var diag = { blob: null, error: '', width: canvas ? canvas.width : 0, height: canvas ? canvas.height : 0 };
+    if (!canvas) { diag.error = 'canvas为空'; return Promise.resolve(diag); }
+    if (!canvas.width || !canvas.height) { diag.error = 'canvas尺寸为0 (' + canvas.width + 'x' + canvas.height + ')'; return Promise.resolve(diag); }
+
+    // 对一个 canvas 尝试 toBlob -> toDataURL -> atob
+    function tryConvert(cv, scaleLabel) {
+        return new Promise(function(resolve) {
+            var label = scaleLabel || ('原图' + cv.width + 'x' + cv.height);
+            var done2 = false;
+            var timer2 = null;
+            function fail(msg) { if (done2) return; done2 = true; if (timer2) clearTimeout(timer2); resolve({ blob: null, msg: label + ': ' + msg }); }
+            function ok(blob) { if (done2) return; done2 = true; if (timer2) clearTimeout(timer2); resolve({ blob: blob, msg: label + '成功' }); }
+            function useDataUrl(reason) {
+                try {
+                    var dataUrl = cv.toDataURL('image/png');
+                    if (!dataUrl || dataUrl.length < 100) { fail(reason + '；toDataURL空(len=' + (dataUrl ? dataUrl.length : 0) + ')'); return; }
+                    var b = dataURLtoBlob(dataUrl);
+                    if (!b || !b.size) { fail(reason + '；atob结果空'); return; }
+                    ok(b);
+                } catch (e) {
+                    fail(reason + '；toDataURL异常:' + (e && e.message ? e.message : e) + '[' + (e && e.name) + ']');
+                }
+            }
             try {
-                resolve(dataURLtoBlob(canvas.toDataURL('image/png')));
-            } catch (e) { resolve(null); }
+                timer2 = setTimeout(function() { useDataUrl('toBlob超时'); }, 3000);
+                cv.toBlob(function(blob) {
+                    if (blob && blob.size > 0) ok(blob);
+                    else useDataUrl('toBlob返回' + (blob ? 'size0' : 'null'));
+                }, 'image/png');
+            } catch (e) {
+                useDataUrl('toBlob异常:' + (e && e.message ? e.message : e));
+            }
+        });
+    }
+
+    // 缩小 canvas 用于内存受限时兜底
+    function scaledCanvas(scale) {
+        var sc = document.createElement('canvas');
+        sc.width = Math.max(1, Math.round(canvas.width * scale));
+        sc.height = Math.max(1, Math.round(canvas.height * scale));
+        sc.getContext('2d').drawImage(canvas, 0, 0, sc.width, sc.height);
+        return sc;
+    }
+
+    return (async function() {
+        // 1) 原图
+        var r = await tryConvert(canvas, '原图');
+        if (r.blob) { diag.blob = r.blob; return diag; }
+        diag.error = r.msg;
+        // 2) 逐步缩小兜底：0.75x, 0.5x
+        var scales = [0.75, 0.5];
+        for (var s = 0; s < scales.length; s++) {
+            var sc = scaledCanvas(scales[s]);
+            var r2 = await tryConvert(sc, '缩放' + scales[s] + 'x');
+            if (r2.blob) { diag.blob = r2.blob; diag.scaled = scales[s]; return diag; }
+            diag.error += ' || ' + r2.msg;
         }
-        try {
-            // 兜底超时，防止某些手机浏览器 toBlob 回调不触发
-            timer = setTimeout(fallback, 3000);
-            canvas.toBlob(function(blob) {
-                if (done) return;
-                if (blob) { done = true; clearTimeout(timer); resolve(blob); }
-                else { fallback(); }
-            }, 'image/png');
-        } catch (e) {
-            fallback();
-        }
-    });
+        return diag;
+    })();
 }
 
 function triggerDownload(blob, filename) {
@@ -1580,11 +1614,11 @@ function triggerDownload(blob, filename) {
 
 async function downloadOne(idx) {
     var img = images[idx];
-    if (!img || !img.canvas) return false;
-    var blob = await canvasToBlobRobust(img.canvas);
-    if (!blob) return false;
-    await triggerDownload(blob, '鞋带二三_' + (idx + 1) + '.png');
-    return true;
+    if (!img || !img.canvas) return { ok: false, error: '图片对象不存在' };
+    var d = await canvasToBlobDiag(img.canvas);
+    if (!d.blob) return { ok: false, error: d.error, width: d.width, height: d.height };
+    await triggerDownload(d.blob, '鞋带二三_' + (idx + 1) + '.png');
+    return { ok: true };
 }
 
 function showDlToast(msg, isError) {
@@ -1671,9 +1705,9 @@ async function confirmDownload() {
 
     if (indices.length === 1) {
         showDlToast('正在下载第 ' + (indices[0] + 1) + ' 张…');
-        var ok = await downloadOne(indices[0]);
+        var res = await downloadOne(indices[0]);
         hideDlToast();
-        if (!ok) alert('第 ' + (indices[0] + 1) + ' 张图片生成失败，请重试或重新生成该图片。');
+        if (!res.ok) alert('第 ' + (indices[0] + 1) + ' 张下载失败：\n' + res.error + '\n尺寸：' + res.width + 'x' + res.height);
         return;
     }
 
@@ -1681,14 +1715,16 @@ async function confirmDownload() {
     showDlToast('正在准备 ' + indices.length + ' 张图片…');
     var blobs = [];
     var failed = [];
+    var errorSamples = [];
     for (var i = 0; i < indices.length; i++) {
         var idx = indices[i];
         showDlToast('正在处理 ' + (i + 1) + ' / ' + indices.length + '（第' + (idx + 1) + '张）…');
-        var blob = await canvasToBlobRobust(images[idx].canvas);
-        if (blob) {
-            blobs.push({ idx: idx, blob: blob });
+        var d = await canvasToBlobDiag(images[idx].canvas);
+        if (d.blob) {
+            blobs.push({ idx: idx, blob: d.blob });
         } else {
             failed.push(idx + 1);
+            if (errorSamples.length < 3) errorSamples.push('#' + (idx + 1) + '(' + d.width + 'x' + d.height + '): ' + d.error);
         }
         // 给主线程一点喘息，避免连续转换卡住
         await new Promise(function(r) { setTimeout(r, 30); });
@@ -1696,7 +1732,7 @@ async function confirmDownload() {
 
     if (!blobs.length) {
         hideDlToast();
-        alert('所有图片生成失败，请重新生成图片后再试。');
+        alert('所有图片转换失败，诊断信息：\n\n' + errorSamples.join('\n\n') + '\n\n请把这段信息截图发给我。');
         return;
     }
 
