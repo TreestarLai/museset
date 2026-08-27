@@ -239,7 +239,7 @@
     <div class="left">
         <div class="header">
             <h1 style="font-weight:300;letter-spacing:2px;">MuseSet</h1>
-            <div class="sub" style="letter-spacing:1px;margin-top:4px;">排云 · 公众号排版工具 <span id="verTag" style="color:#e8a33d;font-weight:600;">v3.5.2</span></div>
+            <div class="sub" style="letter-spacing:1px;margin-top:4px;">排云 · 公众号排版工具 <span id="verTag" style="color:#e8a33d;font-weight:600;">v3.5.3-debug</span></div>
         </div>
         <div class="tabs">
             <div class="tab active" data-mode="body" onclick="switchMode('body')">正文模式</div>
@@ -1533,65 +1533,87 @@ function dataURLtoBlob(dataURL) {
 }
 
 // 把一张源 canvas 导出成 blob。
-// 核心策略：和"能正常显示的缩略图"走完全相同的路径——把内容绘制到一个全新的、
-// 尺寸受控的 canvas 上，再对这个新 canvas 做 toDataURL。避免在超大原始 canvas
-// 上直接 toBlob/toDataURL 触发手机浏览器内存限制。
-// 返回 {blob, error, usedWidth, usedHeight, scaled}
+// v3.5.3: 彻底简化，同步执行，完整诊断，逐级缩小到 240（缩略图尺寸）。
+// 返回 {blob, error, debug}
 function exportCanvasBlob(srcCanvas) {
-    var result = { blob: null, error: '', usedWidth: 0, usedHeight: 0, scaled: false };
-    if (!srcCanvas || !srcCanvas.width || !srcCanvas.height) {
-        result.error = '空canvas(' + (srcCanvas ? srcCanvas.width + 'x' + srcCanvas.height : 'null') + ')';
-        return Promise.resolve(result);
+    var D = []; // 诊断日志
+    function log(m) { D.push(m); }
+
+    if (!srcCanvas) {
+        return { blob: null, error: 'srcCanvas is null/undefined', debug: D.join('\n') };
     }
+    log('srcCanvas: ' + srcCanvas.width + 'x' + srcCanvas.height + ' typeof=' + typeof srcCanvas);
 
-    // 逐级尝试的目标宽度（像素）。1080 是原图宽度；若原图导出失败，逐级缩小。
-    var tryWidths = [srcCanvas.width, 900, 720, 540];
+    // 逐级缩小，包含缩略图尺寸 240（该尺寸已被验证可正常工作）
+    var tryWidths = [srcCanvas.width, 900, 720, 540, 360, 240];
+    // 去重 & 过滤掉比原图大的
+    tryWidths = tryWidths.filter(function(w, i, arr) {
+        return w <= srcCanvas.width && arr.indexOf(w) === i;
+    });
+    log('tryWidths: ' + tryWidths.join(','));
 
-    function attempt(targetW) {
+    for (var ti = 0; ti < tryWidths.length; ti++) {
+        var targetW = tryWidths[ti];
         var scale = targetW / srcCanvas.width;
         var w = Math.max(1, Math.round(srcCanvas.width * scale));
         var h = Math.max(1, Math.round(srcCanvas.height * scale));
-        result.usedWidth = w; result.usedHeight = h;
-        return new Promise(function(resolve) {
-            try {
-                var c = document.createElement('canvas');
-                c.width = w; c.height = h;
-                var ctx = c.getContext('2d');
-                ctx.drawImage(srcCanvas, 0, 0, w, h);
-                // 用 toDataURL（缩略图就是靠它成功的），toBlob 在部分手机上不稳
-                var dataUrl = c.getContext('2d').canvas.toDataURL('image/png');
-                // 释放
-                c.width = 1; c.height = 1; ctx = null; c = null;
-                if (!dataUrl || dataUrl.length < 200) {
-                    resolve({ ok: false, msg: 'w=' + targetW + ' toDataURL空(len=' + (dataUrl ? dataUrl.length : 0) + ')' });
-                    return;
-                }
-                var blob = dataURLtoBlob(dataUrl);
-                if (!blob || !blob.size) {
-                    resolve({ ok: false, msg: 'w=' + targetW + ' atob空' });
-                    return;
-                }
-                result.blob = blob;
-                result.scaled = (targetW < srcCanvas.width);
-                resolve({ ok: true });
-            } catch (e) {
-                resolve({ ok: false, msg: 'w=' + targetW + ' 异常:' + (e && e.message ? e.message : e) + '[' + (e && e.name) + ']' });
+        log('--- try w=' + targetW + ' => ' + w + 'x' + h + ' scale=' + scale.toFixed(3));
+
+        try {
+            var c = document.createElement('canvas');
+            c.width = w;
+            c.height = h;
+            var ctx = c.getContext('2d');
+            if (!ctx) {
+                log('getContext("2d") returned null!');
+                continue;
             }
-        });
+            // 关键：先画背景白（如果原图有透明区域，PNG 体积会变大；这里保持透明即可）
+            ctx.drawImage(srcCanvas, 0, 0, w, h);
+            log('drawImage ok');
+
+            var dataUrl = c.toDataURL('image/png');
+            log('toDataURL returned, length=' + (dataUrl ? dataUrl.length : 'null/undefined') + ' prefix=' + (dataUrl ? dataUrl.substring(0, 30) : ''));
+
+            if (!dataUrl || dataUrl.length < 100) {
+                log('dataUrl too short, fail this width');
+                // 释放
+                c.width = 1; c.height = 1; c = null;
+                continue;
+            }
+
+            var blob;
+            try {
+                blob = dataURLtoBlob(dataUrl);
+            } catch (convErr) {
+                log('dataURLtoBlob threw: ' + (convErr && convErr.message ? convErr.message : convErr) + ' name=' + (convErr && convErr.name));
+                c.width = 1; c.height = 1; c = null;
+                continue;
+            }
+            log('blob size=' + (blob ? blob.size : 'null'));
+
+            // 释放 dataUrl（帮助 GC）
+            dataUrl = null;
+            c.width = 1; c.height = 1; c = null;
+
+            if (blob && blob.size > 0) {
+                return {
+                    blob: blob,
+                    error: '',
+                    debug: D.join('\n'),
+                    scaled: (targetW < srcCanvas.width),
+                    usedWidth: w,
+                    usedHeight: h
+                };
+            }
+            log('blob empty, try next width');
+        } catch (e) {
+            log('EXCEPTION at w=' + targetW + ': ' + (e && e.message ? e.message : String(e)) + ' name=' + (e && e.name) + ' stack=' + (e && e.stack ? String(e.stack).substring(0, 200) : ''));
+            // 继续尝试下一个尺寸
+        }
     }
 
-    return (async function() {
-        var errs = [];
-        for (var i = 0; i < tryWidths.length; i++) {
-            var r = await attempt(tryWidths[i]);
-            if (r.ok) return result;
-            errs.push(r.msg);
-            // 给 GC 一点时间
-            await new Promise(function(res) { setTimeout(res, 50); });
-        }
-        result.error = errs.join(' | ');
-        return result;
-    })();
+    return { blob: null, error: 'All widths failed. Debug log:\n' + D.join('\n'), debug: D.join('\n') };
 }
 
 function triggerDownload(blob, filename) {
@@ -1614,8 +1636,13 @@ function triggerDownload(blob, filename) {
 async function downloadOne(idx) {
     var img = images[idx];
     if (!img || !img.canvas) return { ok: false, error: '图片对象不存在' };
-    var d = await exportCanvasBlob(img.canvas);
-    if (!d.blob) return { ok: false, error: d.error };
+    var d;
+    try {
+        d = exportCanvasBlob(img.canvas);
+    } catch (e) {
+        return { ok: false, error: 'exportCanvasBlob threw: ' + (e && e.message ? e.message : e) + ' name=' + (e && e.name) };
+    }
+    if (!d || !d.blob) return { ok: false, error: (d && d.error) ? d.error : 'unknown error (d=' + d + ')' };
     await triggerDownload(d.blob, '鞋带二三_' + (idx + 1) + '.png');
     return { ok: true, scaled: d.scaled };
 }
@@ -1743,7 +1770,17 @@ async function confirmDownload() {
     hideDlToast();
 
     if (!okCount) {
-        alert('所有图片转换失败，错误信息：\n\n' + firstError + '\n\n请把这段截图发给我。');
+        var debugInfo = firstError || '(firstError is empty string - this is itself a bug)';
+        // 额外附加：第一张图的完整诊断
+        try {
+            if (indices.length > 0 && images[indices[0]] && images[indices[0]].canvas) {
+                var probe = exportCanvasBlob(images[indices[0]].canvas);
+                debugInfo += '\n\n[Probe on first canvas]\n' + (probe.debug || probe.error || 'no debug');
+            }
+        } catch(probeErr) {
+            debugInfo += '\n\n[Probe threw] ' + (probeErr && probeErr.message ? probeErr.message : probeErr);
+        }
+        alert('所有图片转换失败（v3.5.3诊断版）：\n\n' + debugInfo + '\n\n请截图发给我。');
         return;
     }
 
