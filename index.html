@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.loli.net">
     <link rel="preconnect" href="https://gstatic.loli.net" crossorigin>
     <link href="https://fonts.loli.net/css2?family=Noto+Serif+SC:wght@200;300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=LXGW+WenKai:wght@300;400;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.bootcdn.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         :root{--bg:#fafafa;--card:#fff;--bd:#e8e8e8;--txt:#333;--txt2:#888;--ac:#2c2c2c;--ac2:#f0f0f0}
@@ -86,6 +86,7 @@
         .card .badge{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:2px 7px;border-radius:4px;z-index:2;pointer-events:none}
         .card .badge.opening{background:rgba(120,80,40,.65)}
         .card .badge.edited{position:absolute;top:8px;right:8px;background:rgba(60,120,60,.65)}
+        .card .num-badge{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;font-weight:600;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:3;pointer-events:none;font-variant-numeric:tabular-nums}
         .card canvas{width:100%;display:block;cursor:pointer}
         .card .hover-bar{position:absolute;bottom:0;left:0;right:0;padding:8px 12px;background:linear-gradient(transparent,rgba(0,0,0,.5));display:flex;justify-content:flex-end;gap:4px;opacity:0;transition:opacity .15s}
         .card:hover .hover-bar{opacity:1}
@@ -595,9 +596,12 @@
     </div>
 </div>
 
+<!-- Download progress toast -->
+<div id="dlToast" style="display:none;position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fff;padding:10px 22px;border-radius:24px;font-size:13px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.2)"></div>
+
 <script>
 /* ═══════════════════════════════════════════
-   MuseSet排云 · 公众号排版工具 v3.4
+   MuseSet排云 · 公众号排版工具 v3.5
    ═══════════════════════════════════════════ */
 
 // ── Password Gate ──
@@ -1066,6 +1070,8 @@ function renderGallery() {
         dc.style.cssText = 'width:100%;height:auto;display:block;cursor:pointer';
         dc.onclick = () => openEdit(idx);
         card.appendChild(dc);
+        const nb = document.createElement('div'); nb.className = 'num-badge'; nb.textContent = (idx + 1);
+        card.appendChild(nb);
         const hb = document.createElement('div'); hb.className = 'hover-bar';
         const editBtn = document.createElement('button'); editBtn.innerHTML = '✎'; editBtn.title = '编辑';
         editBtn.onclick = e => { e.stopPropagation(); openEdit(idx); };
@@ -1515,24 +1521,67 @@ function hideGuides() {
 }
 
 // ── Download ──
-function downloadOne(idx) {
+// 把 canvas 稳定地转成 blob，带重试，避免偶发 toBlob 返回 null 导致漏图
+function canvasToBlobRobust(canvas, retries) {
+    retries = retries || 0;
     return new Promise(function(resolve) {
-        images[idx].canvas.toBlob(function(blob) {
-            if (!blob) { resolve(); return; }
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.download = '鞋带二三_' + (idx + 1) + '.png';
-            a.href = url;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(function() {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                resolve();
-            }, 500);
-        }, 'image/png');
+        try {
+            canvas.toBlob(function(blob) {
+                if (blob) { resolve(blob); return; }
+                if (retries < 3) {
+                    setTimeout(function() { resolve(canvasToBlobRobust(canvas, retries + 1)); }, 250);
+                } else {
+                    // toBlob 持续失败，尝试用 toDataURL 兜底
+                    try {
+                        var dataUrl = canvas.toDataURL('image/png');
+                        fetch(dataUrl).then(function(r) { return r.blob(); }).then(resolve).catch(function() { resolve(null); });
+                    } catch (e) { resolve(null); }
+                }
+            }, 'image/png');
+        } catch (e) {
+            if (retries < 3) {
+                setTimeout(function() { resolve(canvasToBlobRobust(canvas, retries + 1)); }, 250);
+            } else { resolve(null); }
+        }
     });
+}
+
+function triggerDownload(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.style.display = 'none';
+    a.download = filename;
+    a.href = url;
+    document.body.appendChild(a);
+    a.click();
+    return new Promise(function(resolve) {
+        setTimeout(function() {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            resolve();
+        }, 600);
+    });
+}
+
+async function downloadOne(idx) {
+    var img = images[idx];
+    if (!img || !img.canvas) return false;
+    var blob = await canvasToBlobRobust(img.canvas);
+    if (!blob) return false;
+    await triggerDownload(blob, '鞋带二三_' + (idx + 1) + '.png');
+    return true;
+}
+
+function showDlToast(msg, isError) {
+    var t = document.getElementById('dlToast');
+    if (!t) return;
+    t.textContent = msg;
+    t.style.background = isError ? 'rgba(180,60,60,.92)' : 'rgba(0,0,0,.8)';
+    t.style.display = 'block';
+}
+function hideDlToast() {
+    var t = document.getElementById('dlToast');
+    if (t) t.style.display = 'none';
 }
 
 // ── Download Select Modal ──
@@ -1603,43 +1652,72 @@ function updateDlCount() {
 async function confirmDownload() {
     if (!dlSelected.size) { alert('请至少选择一张图片'); return; }
     closeDlModal();
-    const indices = [...dlSelected].sort((a, b) => a - b);
-    
+    var indices = [].slice.call(dlSelected).sort(function(a, b) { return a - b; });
+
     if (indices.length === 1) {
-        await downloadOne(indices[0]);
+        showDlToast('正在下载第 ' + (indices[0] + 1) + ' 张…');
+        var ok = await downloadOne(indices[0]);
+        hideDlToast();
+        if (!ok) alert('第 ' + (indices[0] + 1) + ' 张图片生成失败，请重试或重新生成该图片。');
         return;
     }
-    
-    // 多张用 JSZip 打包
+
+    // 多张：优先用 JSZip 打包成一个 zip，避免浏览器拦截连续下载导致漏图
+    showDlToast('正在准备 ' + indices.length + ' 张图片…');
+    var blobs = [];
+    var failed = [];
+    for (var i = 0; i < indices.length; i++) {
+        var idx = indices[i];
+        showDlToast('正在处理 ' + (i + 1) + ' / ' + indices.length + '（第' + (idx + 1) + '张）…');
+        var blob = await canvasToBlobRobust(images[idx].canvas);
+        if (blob) {
+            blobs.push({ idx: idx, blob: blob });
+        } else {
+            failed.push(idx + 1);
+        }
+        // 给主线程一点喘息，避免连续转换卡住
+        await new Promise(function(r) { setTimeout(r, 30); });
+    }
+
+    if (!blobs.length) {
+        hideDlToast();
+        alert('所有图片生成失败，请重新生成图片后再试。');
+        return;
+    }
+
+    var useZip = false;
     try {
-        if (typeof JSZip === 'undefined') throw new Error('JSZip not available');
-        const zip = new JSZip();
-        for (const idx of indices) {
-            const blob = await new Promise(function(resolve) {
-                images[idx].canvas.toBlob(resolve, 'image/png');
+        if (typeof JSZip !== 'undefined') useZip = true;
+    } catch (e) { useZip = false; }
+
+    if (useZip) {
+        try {
+            showDlToast('正在打包 ' + blobs.length + ' 张图片…');
+            var zip = new JSZip();
+            blobs.forEach(function(item) {
+                zip.file('鞋带二三_' + (item.idx + 1) + '.png', item.blob);
             });
-            if (blob) {
-                zip.file('鞋带二三_' + (idx + 1) + '.png', blob);
+            var zipBlob = await zip.generateAsync({ type: 'blob' });
+            await triggerDownload(zipBlob, '鞋带二三_图片_' + new Date().toISOString().slice(0, 10) + '.zip');
+            hideDlToast();
+            if (failed.length) {
+                alert('下载完成，但以下序号生成失败未包含：第 ' + failed.join('、') + ' 张。建议重新生成这些图片后再下载。');
             }
+            return;
+        } catch (err) {
+            // zip 失败则降级到逐张下载
         }
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
-        const url = URL.createObjectURL(zipBlob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.download = '鞋带二三_图片_' + new Date().toISOString().slice(0,10) + '.zip';
-        a.href = url;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(function() {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, 1000);
-    } catch (err) {
-        // JSZip 不可用时，降级为逐张下载
-        for (const idx of indices) {
-            await downloadOne(idx);
-            await new Promise(function(r) { setTimeout(r, 800); });
-        }
+    }
+
+    // 降级：逐张下载（间隔加长，降低浏览器拦截概率）
+    for (var j = 0; j < blobs.length; j++) {
+        showDlToast('正在下载 ' + (j + 1) + ' / ' + blobs.length + '…');
+        await triggerDownload(blobs[j].blob, '鞋带二三_' + (blobs[j].idx + 1) + '.png');
+        await new Promise(function(r) { setTimeout(r, 900); });
+    }
+    hideDlToast();
+    if (failed.length) {
+        alert('下载完成，但以下序号生成失败：第 ' + failed.join('、') + ' 张。建议重新生成这些图片后再下载。');
     }
 }
 
