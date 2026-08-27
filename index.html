@@ -1521,27 +1521,42 @@ function hideGuides() {
 }
 
 // ── Download ──
-// 把 canvas 稳定地转成 blob，带重试，避免偶发 toBlob 返回 null 导致漏图
-function canvasToBlobRobust(canvas, retries) {
-    retries = retries || 0;
+// dataURL 转 blob（用 atob，兼容手机浏览器，不依赖 fetch data:）
+function dataURLtoBlob(dataURL) {
+    try {
+        var arr = dataURL.split(',');
+        var mime = arr[0].match(/:(.*?);/)[1];
+        var bstr = atob(arr[1]);
+        var n = bstr.length;
+        var u8arr = new Uint8Array(n);
+        while (n--) u8arr[n] = bstr.charCodeAt(n);
+        return new Blob([u8arr], { type: mime });
+    } catch (e) { return null; }
+}
+
+// 把 canvas 稳定地转成 blob：优先 toBlob，失败则用 toDataURL + atob 兜底
+function canvasToBlobRobust(canvas) {
     return new Promise(function(resolve) {
+        if (!canvas || !canvas.width || !canvas.height) { resolve(null); return; }
+        var done = false;
+        var timer = null;
+        function fallback() {
+            if (done) return; done = true;
+            if (timer) clearTimeout(timer);
+            try {
+                resolve(dataURLtoBlob(canvas.toDataURL('image/png')));
+            } catch (e) { resolve(null); }
+        }
         try {
+            // 兜底超时，防止某些手机浏览器 toBlob 回调不触发
+            timer = setTimeout(fallback, 3000);
             canvas.toBlob(function(blob) {
-                if (blob) { resolve(blob); return; }
-                if (retries < 3) {
-                    setTimeout(function() { resolve(canvasToBlobRobust(canvas, retries + 1)); }, 250);
-                } else {
-                    // toBlob 持续失败，尝试用 toDataURL 兜底
-                    try {
-                        var dataUrl = canvas.toDataURL('image/png');
-                        fetch(dataUrl).then(function(r) { return r.blob(); }).then(resolve).catch(function() { resolve(null); });
-                    } catch (e) { resolve(null); }
-                }
+                if (done) return;
+                if (blob) { done = true; clearTimeout(timer); resolve(blob); }
+                else { fallback(); }
             }, 'image/png');
         } catch (e) {
-            if (retries < 3) {
-                setTimeout(function() { resolve(canvasToBlobRobust(canvas, retries + 1)); }, 250);
-            } else { resolve(null); }
+            fallback();
         }
     });
 }
