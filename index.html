@@ -86,7 +86,6 @@
         .card .badge{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:2px 7px;border-radius:4px;z-index:2;pointer-events:none}
         .card .badge.opening{background:rgba(120,80,40,.65)}
         .card .badge.edited{position:absolute;top:8px;right:8px;background:rgba(60,120,60,.65)}
-        .card .num-badge{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;font-weight:600;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:3;pointer-events:none;font-variant-numeric:tabular-nums}
         .card canvas{width:100%;display:block;cursor:pointer}
         .card .hover-bar{position:absolute;bottom:0;left:0;right:0;padding:8px 12px;background:linear-gradient(transparent,rgba(0,0,0,.5));display:flex;justify-content:flex-end;gap:4px;opacity:0;transition:opacity .15s}
         .card:hover .hover-bar{opacity:1}
@@ -239,7 +238,7 @@
     <div class="left">
         <div class="header">
             <h1 style="font-weight:300;letter-spacing:2px;">MuseSet</h1>
-            <div class="sub" style="letter-spacing:1px;margin-top:4px;">排云 · 公众号排版工具 <span id="verTag" style="color:#e8a33d;font-weight:600;">v3.5.4-debug</span></div>
+            <div class="sub" style="letter-spacing:1px;margin-top:4px;">排云 · 公众号排版工具 <span style="color:#e8a33d;font-weight:600;">v3.6</span></div>
         </div>
         <div class="tabs">
             <div class="tab active" data-mode="body" onclick="switchMode('body')">正文模式</div>
@@ -596,29 +595,10 @@
     </div>
 </div>
 
-<!-- Download progress toast -->
-<div id="dlToast" style="display:none;position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fff;padding:10px 22px;border-radius:24px;font-size:13px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.2)"></div>
-
 <script>
 /* ═══════════════════════════════════════════
-   MuseSet排云 · 公众号排版工具 v3.5
+   MuseSet排云 · 公众号排版工具 v3.4
    ═══════════════════════════════════════════ */
-
-// ── v3.5.4 全局错误捕获，诊断下载问题 ──
-window.__dlErrors = [];
-window.addEventListener('error', function(ev) {
-    try {
-        window.__dlErrors.push('[window.error] ' + (ev.message || '') + ' @ ' + (ev.filename || '') + ':' + (ev.lineno || '') + ':' + (ev.colno || '') + (ev.error && ev.error.stack ? '\n' + ev.error.stack : ''));
-        if (window.__dlErrors.length > 20) window.__dlErrors.shift();
-    } catch(_) {}
-});
-window.addEventListener('unhandledrejection', function(ev) {
-    try {
-        var reason = ev.reason;
-        window.__dlErrors.push('[unhandledrejection] ' + (reason && reason.message ? reason.message : String(reason)) + (reason && reason.stack ? '\n' + reason.stack : ''));
-        if (window.__dlErrors.length > 20) window.__dlErrors.shift();
-    } catch(_) {}
-});
 
 // ── Password Gate ──
 const ACCESS_PWD = 'Treestar202601';
@@ -1076,6 +1056,13 @@ function renderGallery() {
         badge.className = 'badge' + (img.mode === 'opening' ? ' opening' : '');
         badge.textContent = img.mode === 'opening' ? '篇首语' : '正文';
         card.appendChild(badge);
+        // v3.6: 序号 badge
+        const numBadge = document.createElement('div');
+        numBadge.className = 'badge num-badge';
+        numBadge.textContent = '#' + (idx + 1);
+        numBadge.style.cssText = 'position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,0.65);color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;z-index:2;';
+        card.style.position = 'relative';
+        card.appendChild(numBadge);
         if (img.edited) {
             const eb = document.createElement('div'); eb.className = 'badge edited'; eb.textContent = '已编辑';
             card.appendChild(eb);
@@ -1086,8 +1073,6 @@ function renderGallery() {
         dc.style.cssText = 'width:100%;height:auto;display:block;cursor:pointer';
         dc.onclick = () => openEdit(idx);
         card.appendChild(dc);
-        const nb = document.createElement('div'); nb.className = 'num-badge'; nb.textContent = (idx + 1);
-        card.appendChild(nb);
         const hb = document.createElement('div'); hb.className = 'hover-bar';
         const editBtn = document.createElement('button'); editBtn.innerHTML = '✎'; editBtn.title = '编辑';
         editBtn.onclick = e => { e.stopPropagation(); openEdit(idx); };
@@ -1537,142 +1522,105 @@ function hideGuides() {
 }
 
 // ── Download ──
-// dataURL 转 blob
-function dataURLtoBlob(dataURL) {
-    var arr = dataURL.split(',');
-    var mime = arr[0].match(/:(.*?);/)[1];
-    var bstr = atob(arr[1]);
-    var n = bstr.length;
-    var u8arr = new Uint8Array(n);
-    while (n--) u8arr[n] = bstr.charCodeAt(n);
-    return new Blob([u8arr], { type: mime });
-}
 
-// 把一张源 canvas 导出成 blob。
-// v3.5.3: 彻底简化，同步执行，完整诊断，逐级缩小到 240（缩略图尺寸）。
-// 返回 {blob, error, debug}
-function exportCanvasBlob(srcCanvas) {
-    var D = []; // 诊断日志
-    function log(m) { D.push(m); }
-
-    if (!srcCanvas) {
-        return { blob: null, error: 'srcCanvas is null/undefined', debug: D.join('\n') };
-    }
-    log('srcCanvas: ' + srcCanvas.width + 'x' + srcCanvas.height + ' typeof=' + typeof srcCanvas);
-
-    // 逐级缩小，包含缩略图尺寸 240（该尺寸已被验证可正常工作）
-    var tryWidths = [srcCanvas.width, 900, 720, 540, 360, 240];
-    // 去重 & 过滤掉比原图大的
-    tryWidths = tryWidths.filter(function(w, i, arr) {
-        return w <= srcCanvas.width && arr.indexOf(w) === i;
-    });
-    log('tryWidths: ' + tryWidths.join(','));
-
-    for (var ti = 0; ti < tryWidths.length; ti++) {
-        var targetW = tryWidths[ti];
-        var scale = targetW / srcCanvas.width;
-        var w = Math.max(1, Math.round(srcCanvas.width * scale));
-        var h = Math.max(1, Math.round(srcCanvas.height * scale));
-        log('--- try w=' + targetW + ' => ' + w + 'x' + h + ' scale=' + scale.toFixed(3));
-
-        try {
-            var c = document.createElement('canvas');
-            c.width = w;
-            c.height = h;
-            var ctx = c.getContext('2d');
-            if (!ctx) {
-                log('getContext("2d") returned null!');
-                continue;
-            }
-            // 关键：先画背景白（如果原图有透明区域，PNG 体积会变大；这里保持透明即可）
-            ctx.drawImage(srcCanvas, 0, 0, w, h);
-            log('drawImage ok');
-
-            var dataUrl = c.toDataURL('image/png');
-            log('toDataURL returned, length=' + (dataUrl ? dataUrl.length : 'null/undefined') + ' prefix=' + (dataUrl ? dataUrl.substring(0, 30) : ''));
-
-            if (!dataUrl || dataUrl.length < 100) {
-                log('dataUrl too short, fail this width');
-                // 释放
-                c.width = 1; c.height = 1; c = null;
-                continue;
-            }
-
-            var blob;
-            try {
-                blob = dataURLtoBlob(dataUrl);
-            } catch (convErr) {
-                log('dataURLtoBlob threw: ' + (convErr && convErr.message ? convErr.message : convErr) + ' name=' + (convErr && convErr.name));
-                c.width = 1; c.height = 1; c = null;
-                continue;
-            }
-            log('blob size=' + (blob ? blob.size : 'null'));
-
-            // 释放 dataUrl（帮助 GC）
-            dataUrl = null;
-            c.width = 1; c.height = 1; c = null;
-
-            if (blob && blob.size > 0) {
-                return {
-                    blob: blob,
-                    error: '',
-                    debug: D.join('\n'),
-                    scaled: (targetW < srcCanvas.width),
-                    usedWidth: w,
-                    usedHeight: h
-                };
-            }
-            log('blob empty, try next width');
-        } catch (e) {
-            log('EXCEPTION at w=' + targetW + ': ' + (e && e.message ? e.message : String(e)) + ' name=' + (e && e.name) + ' stack=' + (e && e.stack ? String(e.stack).substring(0, 200) : ''));
-            // 继续尝试下一个尺寸
+// v3.6: 可靠的 canvas→Blob 转换
+// 1) 优先 toBlob，失败/超时自动重试 3 次
+// 2) toBlob 彻底失败时降级到 toDataURL→atob 转 Blob
+// 3) 每次重试间隔 100ms 给 GC 时间
+function canvasToBlob(canvas) {
+    return new Promise(function(resolve, reject) {
+        if (!canvas || !canvas.width || !canvas.height) {
+            reject(new Error('canvas 无效: ' + (canvas ? canvas.width + 'x' + canvas.height : 'null')));
+            return;
         }
-    }
+        var attempts = 0;
+        var maxAttempts = 3;
 
-    return { blob: null, error: 'All widths failed. Debug log:\n' + D.join('\n'), debug: D.join('\n') };
-}
+        function tryToBlob() {
+            attempts++;
+            var done = false;
+            var timer = setTimeout(function() {
+                if (done) return;
+                done = true;
+                if (attempts < maxAttempts) {
+                    setTimeout(tryToBlob, 150);
+                } else {
+                    fallbackDataUrl();
+                }
+            }, 8000);
 
-function triggerDownload(blob, filename) {
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.style.display = 'none';
-    a.download = filename;
-    a.href = url;
-    document.body.appendChild(a);
-    a.click();
-    return new Promise(function(resolve) {
-        setTimeout(function() {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            resolve();
-        }, 600);
+            try {
+                canvas.toBlob(function(blob) {
+                    if (done) return;
+                    done = true;
+                    clearTimeout(timer);
+                    if (blob && blob.size > 0) {
+                        resolve(blob);
+                    } else if (attempts < maxAttempts) {
+                        setTimeout(tryToBlob, 150);
+                    } else {
+                        fallbackDataUrl();
+                    }
+                }, 'image/png');
+            } catch(e) {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                if (attempts < maxAttempts) {
+                    setTimeout(tryToBlob, 150);
+                } else {
+                    fallbackDataUrl();
+                }
+            }
+        }
+
+        function fallbackDataUrl() {
+            try {
+                var dataUrl = canvas.toDataURL('image/png');
+                if (!dataUrl || dataUrl.length < 200) {
+                    reject(new Error('toDataURL 返回空 (len=' + (dataUrl ? dataUrl.length : 0) + ')'));
+                    return;
+                }
+                var arr = dataUrl.split(',');
+                var mime = arr[0].match(/:(.*?);/)[1];
+                var bstr = atob(arr[1]);
+                var n = bstr.length;
+                var u8arr = new Uint8Array(n);
+                while (n--) u8arr[n] = bstr.charCodeAt(n);
+                var blob = new Blob([u8arr], { type: mime });
+                if (blob && blob.size > 0) {
+                    resolve(blob);
+                } else {
+                    reject(new Error('atob 转换后 blob 为空'));
+                }
+            } catch(e2) {
+                reject(new Error('toBlob 和 toDataURL 均失败: ' + (e2 && e2.message ? e2.message : e2)));
+            }
+        }
+
+        tryToBlob();
     });
 }
 
-async function downloadOne(idx) {
-    var img = images[idx];
-    if (!img || !img.canvas) return { ok: false, error: '图片对象不存在' };
-    var d;
-    try {
-        d = exportCanvasBlob(img.canvas);
-    } catch (e) {
-        return { ok: false, error: 'exportCanvasBlob threw: ' + (e && e.message ? e.message : e) + ' name=' + (e && e.name) };
-    }
-    if (!d || !d.blob) return { ok: false, error: (d && d.error) ? d.error : 'unknown error (d=' + d + ')' };
-    await triggerDownload(d.blob, '鞋带二三_' + (idx + 1) + '.png');
-    return { ok: true, scaled: d.scaled };
-}
-
-function showDlToast(msg, isError) {
-    var t = document.getElementById('dlToast');
-    if (!t) return;
-    t.textContent = msg;
-    t.style.background = isError ? 'rgba(180,60,60,.92)' : 'rgba(0,0,0,.8)';
-    t.style.display = 'block';
-}
-function hideDlToast() {
-    var t = document.getElementById('dlToast');
-    if (t) t.style.display = 'none';
+function downloadOne(idx) {
+    return new Promise(function(resolve) {
+        canvasToBlob(images[idx].canvas).then(function(blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.download = '鞋带二三_' + (idx + 1) + '.png';
+            a.href = url;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                resolve({ ok: true });
+            }, 500);
+        }).catch(function(err) {
+            resolve({ ok: false, error: (err && err.message) ? err.message : String(err) });
+        });
+    });
 }
 
 // ── Download Select Modal ──
@@ -1743,118 +1691,62 @@ function updateDlCount() {
 async function confirmDownload() {
     if (!dlSelected.size) { alert('请至少选择一张图片'); return; }
     closeDlModal();
-    var indices = [].slice.call(dlSelected).sort(function(a, b) { return a - b; });
-
-    // 单张直接下载
+    const indices = [...dlSelected].sort((a, b) => a - b);
+    
     if (indices.length === 1) {
-        showDlToast('正在下载第 ' + (indices[0] + 1) + ' 张…');
-        var res = await downloadOne(indices[0]);
-        hideDlToast();
-        if (!res.ok) alert('第 ' + (indices[0] + 1) + ' 张下载失败：\n' + res.error);
+        var singleRes = await downloadOne(indices[0]);
+        if (singleRes && !singleRes.ok) {
+            alert('第 ' + (indices[0] + 1) + ' 张下载失败：' + (singleRes.error || '未知错误'));
+        }
         return;
     }
-
-    // 多张：边转换边写入 zip，不在内存里囤所有 blob，避免手机内存爆掉
-    var useZip = (typeof JSZip !== 'undefined');
-    var zip = useZip ? new JSZip() : null;
-    var okCount = 0;
+    
+    // 多张用 JSZip 打包
     var failed = [];
-    var firstError = '';
-    var anyScaled = false;
-
-    for (var i = 0; i < indices.length; i++) {
-        var idx = indices[i];
-        showDlToast('正在处理 ' + (i + 1) + ' / ' + indices.length + '（第' + (idx + 1) + '张）…');
-        try {
-            var d = await exportCanvasBlob(images[idx].canvas);
-            if (d.blob) {
-                if (zip) zip.file('鞋带二三_' + (idx + 1) + '.png', d.blob);
-                okCount++;
-                if (d.scaled) anyScaled = true;
-            } else {
-                failed.push(idx + 1);
-                if (!firstError) firstError = d.error;
-            }
-        } catch (e) {
-            failed.push(idx + 1);
-            if (!firstError) firstError = (e && e.message) ? e.message : String(e);
-        }
-        // 让主线程喘息 + 给 GC 时间
-        await new Promise(function(r) { setTimeout(r, 80); });
-    }
-
-    hideDlToast();
-
-    if (!okCount) {
-        // v3.5.4: 收集所有错误，不再只取 firstError
-        var allErrors = [];
-        for (var ei = 0; ei < failed.length; ei++) {
-            allErrors.push('#' + failed[ei]);
-        }
-        // 无条件跑 probe，不依赖任何 if
-        var probeText = 'probe skipped';
-        try {
-            var pIdx = indices[0];
-            var pImg = images[pIdx];
-            if (pImg) {
-                var pCanvas = pImg.canvas;
-                if (pCanvas) {
-                    probeText = 'canvas exists: ' + pCanvas.width + 'x' + pCanvas.height + '\n';
-                    try {
-                        var pResult = exportCanvasBlob(pCanvas);
-                        probeText += 'exportCanvasBlob returned:\n' + JSON.stringify({hasBlob: !!pResult.blob, blobSize: pResult.blob ? pResult.blob.size : 0, errorLen: pResult.error ? pResult.error.length : 0}) + '\n';
-                        probeText += 'DEBUG LOG:\n' + (pResult.debug || '(no debug)');
-                    } catch(pe) {
-                        probeText += 'exportCanvasBlob THREW: ' + (pe && pe.message ? pe.message : pe) + ' name=' + (pe && pe.name) + ' stack=' + (pe && pe.stack ? String(pe.stack).substring(0,500) : '');
-                    }
+    try {
+        if (typeof JSZip === 'undefined') throw new Error('JSZip not available');
+        const zip = new JSZip();
+        for (var i = 0; i < indices.length; i++) {
+            var idx = indices[i];
+            try {
+                var blob = await canvasToBlob(images[idx].canvas);
+                if (blob) {
+                    zip.file('鞋带二三_' + (idx + 1) + '.png', blob);
                 } else {
-                    probeText = 'img exists but canvas is ' + pCanvas + ' (typeof=' + typeof pCanvas + ')';
+                    failed.push(idx + 1);
                 }
-            } else {
-                probeText = 'images[' + pIdx + '] is ' + pImg;
+            } catch(e) {
+                failed.push(idx + 1);
             }
-        } catch(outerProbeErr) {
-            probeText = 'probe itself threw: ' + (outerProbeErr && outerProbeErr.message ? outerProbeErr.message : outerProbeErr);
+            // 间隔 100ms，给浏览器喘息时间
+            if (i < indices.length - 1) await new Promise(function(r) { setTimeout(r, 100); });
         }
-
-        // 用自定义 modal 显示，避免 alert 截断
-        var debugModal = document.getElementById('debugModal');
-        if (!debugModal) {
-            debugModal = document.createElement('div');
-            debugModal.id = 'debugModal';
-            debugModal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
-            debugModal.innerHTML = '<div style="background:#1a1a1a;color:#0f0;border-radius:12px;max-width:90%;max-height:85%;overflow:auto;padding:20px;font-family:monospace;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-all;"><div id="debugContent"></div><button onclick="document.getElementById(\'debugModal\').style.display=\'none\'" style="margin-top:16px;padding:10px 30px;background:#e8a33d;color:#000;border:none;border-radius:8px;font-size:15px;font-weight:600;">关闭</button></div>';
-            document.body.appendChild(debugModal);
-        }
-        var dc = document.getElementById('debugContent');
-        var globalErrs = (window.__dlErrors && window.__dlErrors.length) ? window.__dlErrors.join('\n---\n') : '(none)';
-        dc.textContent = '=== v3.5.4 诊断报告 ===\n失败序号: ' + allErrors.join(', ') + '\nfirstError: [' + firstError + ']\n\n[全局错误日志]\n' + globalErrs + '\n\n[Probe]\n' + probeText;
-        debugModal.style.display = 'flex';
-        return;
-    }
-
-    if (zip) {
-        try {
-            showDlToast('正在打包 ' + okCount + ' 张图片…');
-            var zipBlob = await zip.generateAsync({ type: 'blob' });
-            await triggerDownload(zipBlob, '鞋带二三_图片_' + new Date().toISOString().slice(0, 10) + '.zip');
-        } catch (e) {
-            alert('打包失败：' + ((e && e.message) ? e.message : e) + '\n请尝试分批下载。');
+        if (failed.length === indices.length) {
+            alert('所有图片转换失败，请重试或尝试单张下载。');
             return;
         }
-    } else {
-        // 没有 JSZip，逐张下载
-        for (var k = 0; k < indices.length; k++) {
-            if (failed.indexOf(indices[k] + 1) >= 0) continue;
-            await downloadOne(indices[k]);
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.download = '鞋带二三_图片_' + new Date().toISOString().slice(0,10) + '.zip';
+        a.href = url;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 1000);
+        if (failed.length) {
+            alert('下载完成，但以下序号失败：第 ' + failed.join('、') + ' 张。\n可尝试单独下载这些图片。');
+        }
+    } catch (err) {
+        // JSZip 不可用时，降级为逐张下载
+        for (const idx of indices) {
+            await downloadOne(idx);
             await new Promise(function(r) { setTimeout(r, 800); });
         }
     }
-
-    var msg = '下载完成，共 ' + okCount + ' 张。';
-    if (anyScaled) msg += '\n（部分图片因设备内存限制已适当缩小导出）';
-    if (failed.length) msg += '\n以下序号失败：第 ' + failed.join('、') + ' 张。\n原因：' + firstError;
-    if (failed.length || anyScaled) alert(msg);
 }
 
 // ── Preview ──
